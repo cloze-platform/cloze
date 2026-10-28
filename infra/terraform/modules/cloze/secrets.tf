@@ -30,11 +30,11 @@ resource "aws_ssm_parameter" "secret_key" {
 
 resource "aws_ssm_parameter" "database_url" {
   name        = "${local.ssm_prefix}/DATABASE_URL"
-  description = "The app's database connection, as the restricted cloze_app user."
+  description = "The app's database connection, as the restricted cloze_app user (TLS, server certificate verified)."
   type        = "SecureString"
   key_id      = aws_kms_key.data.arn
   value = format(
-    "postgresql://%s:%s@%s/%s?sslmode=require",
+    "postgresql://%s:%s@%s/%s?sslmode=verify-full&sslrootcert=/etc/ssl/certs/rds-global-bundle.pem",
     "cloze_app",
     random_password.db_app.result,
     aws_db_instance.main.endpoint,
@@ -48,7 +48,7 @@ resource "aws_ssm_parameter" "database_owner_url" {
   type        = "SecureString"
   key_id      = aws_kms_key.data.arn
   value = format(
-    "postgresql://%s:%s@%s/%s?sslmode=require",
+    "postgresql://%s:%s@%s/%s?sslmode=verify-full&sslrootcert=/etc/ssl/certs/rds-global-bundle.pem",
     aws_db_instance.main.username,
     random_password.db.result,
     aws_db_instance.main.endpoint,

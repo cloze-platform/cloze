@@ -15,6 +15,10 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b openssl \
     && rm -rf /var/lib/apt/lists/*
 
+# RDS certificate authorities, so the app can verify the database server.
+ADD https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem /etc/ssl/certs/rds-global-bundle.pem
+RUN chmod 644 /etc/ssl/certs/rds-global-bundle.pem
+
 WORKDIR /app
 
 COPY requirements.txt .

@@ -23,9 +23,10 @@ def owner():
     engine = create_engine(OWNER_URL)
     with engine.begin() as conn:
         conn.exec_driver_sql("CREATE TABLE notes (id SERIAL PRIMARY KEY, body TEXT)")
+        conn.exec_driver_sql("CREATE TABLE audit_log (id SERIAL PRIMARY KEY, action TEXT)")
     yield engine
     with engine.begin() as conn:
-        conn.exec_driver_sql("DROP TABLE IF EXISTS notes, later")
+        conn.exec_driver_sql("DROP TABLE IF EXISTS notes, later, audit_log")
     engine.dispose()
 
 
@@ -68,16 +69,39 @@ def test_app_user_reads_and_writes_rows(owner, app_url):
     _run_as(app_url, "DELETE FROM notes")
 
 
-@pytest.mark.parametrize("ddl", [
+@pytest.mark.parametrize("statement", [
     "CREATE TABLE sneaky (id INT)",
     "ALTER TABLE notes ADD COLUMN extra INT",
     "DROP TABLE notes",
+    "TRUNCATE notes",
+    "SELECT setval('notes_id_seq', 1000)",
 ])
-def test_app_user_cannot_change_the_schema(owner, app_url, ddl):
+def test_app_user_cannot_change_the_schema(owner, app_url, statement):
     ensure_app_user(owner, app_url)
 
     with pytest.raises(psycopg2.errors.InsufficientPrivilege):
-        _run_as(app_url, ddl)
+        _run_as(app_url, statement)
+
+
+def test_audit_log_is_insert_only(owner, app_url):
+    ensure_app_user(owner, app_url)
+
+    _run_as(app_url, "INSERT INTO audit_log (action) VALUES ('login')")
+    assert _run_as(app_url, "SELECT action FROM audit_log") == [("login",)]
+    for statement in ("UPDATE audit_log SET action = 'nothing'", "DELETE FROM audit_log"):
+        with pytest.raises(psycopg2.errors.InsufficientPrivilege):
+            _run_as(app_url, statement)
+
+
+def test_rerun_removes_privileges_granted_by_hand(owner, app_url):
+    ensure_app_user(owner, app_url)
+    with owner.begin() as conn:
+        conn.exec_driver_sql(f'GRANT TRUNCATE ON notes TO "{make_url(app_url).username}"')
+
+    ensure_app_user(owner, app_url)
+
+    with pytest.raises(psycopg2.errors.InsufficientPrivilege):
+        _run_as(app_url, "TRUNCATE notes")
 
 
 def test_tables_created_later_are_covered(owner, app_url):

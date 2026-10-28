@@ -63,6 +63,12 @@ variable "db_engine_version" {
   description = "PostgreSQL major version. Minor versions are upgraded automatically in the maintenance window."
   type        = string
   default     = "17"
+
+  validation {
+    # The app's restricted database user relies on PostgreSQL 15+ schema defaults.
+    condition     = can(tonumber(var.db_engine_version)) && tonumber(var.db_engine_version) >= 15
+    error_message = "db_engine_version must be a major version, 15 or later."
+  }
 }
 
 variable "db_instance_class" {

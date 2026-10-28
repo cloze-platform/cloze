@@ -33,7 +33,7 @@ This folder builds one complete Cloze instance inside a dedicated AWS account: n
 | Network | VPC across 2 AZs; public, app and db subnets | Only the load balancer is reachable from the internet. The database has no internet route at all. |
 | Outbound | One NAT gateway (per-AZ is optional) | The app must call the LLM APIs. One NAT is ~$33/mo, and an AZ outage would only cut outbound calls. |
 | Database | RDS PostgreSQL 17, `db.t4g.small`, single-AZ, 14-day point-in-time recovery, deletion protection | Fits a research-scale workload. Use `db_multi_az` for automatic failover (about 2× the cost). |
-| Encryption | One customer-managed KMS key per instance | Covers the database, secrets, logs and images. TLS on every hop: browser to ALB (ACM certificate), ALB to app (a self-signed certificate the container generates at start), and app to database (`rds.force_ssl`). |
+| Encryption | One customer-managed KMS key per instance | Covers the database, secrets, logs and images. TLS on every hop: browser to ALB (ACM certificate), ALB to app (a self-signed certificate the container generates at start), and app to database (`rds.force_ssl`, with the app verifying the server against the RDS certificate authorities). |
 | Database users | The app connects as `cloze_app`, which can read and write rows but not change the schema | The owner (RDS master user) is only used by the admin task definition, for setup and migrations. |
 | Compute | ECS Fargate on ARM64 (Graviton) | No servers to patch, and ~20% cheaper than x86. |
 | Secrets | SSM Parameter Store, under `/cloze-<instance>/` | Injected as environment variables at task start. API keys are set by hand, so they never enter Terraform state or git. |
