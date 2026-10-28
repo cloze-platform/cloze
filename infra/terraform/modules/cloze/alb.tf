@@ -1,5 +1,6 @@
-# TLS terminates here. Nothing is served until enable_https is set; see its
-# description in variables.tf.
+# HTTPS end to end: browser to ALB with the ACM certificate, ALB to containers
+# with their self-signed one (which the ALB doesn't verify). Nothing is served
+# until enable_https is set; see its description in variables.tf.
 
 resource "aws_acm_certificate" "app" {
   domain_name       = var.domain_name
@@ -31,12 +32,13 @@ resource "aws_lb_target_group" "web" {
   name        = "${var.name}-web"
   vpc_id      = aws_vpc.main.id
   target_type = "ip"
-  protocol    = "HTTP"
+  protocol    = "HTTPS"
   port        = var.container_port
 
   deregistration_delay = 30
 
   health_check {
+    protocol            = "HTTPS"
     path                = var.health_check_path
     matcher             = "200"
     interval            = 15

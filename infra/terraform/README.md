@@ -33,7 +33,7 @@ This folder builds one complete Cloze instance inside a dedicated AWS account: n
 | Network | VPC across 2 AZs; public, app and db subnets | Only the load balancer is reachable from the internet. The database has no internet route at all. |
 | Outbound | One NAT gateway (per-AZ is optional) | The app must call the LLM APIs. One NAT is ~$33/mo, and an AZ outage would only cut outbound calls. |
 | Database | RDS PostgreSQL 17, `db.t4g.small`, single-AZ, 14-day point-in-time recovery, deletion protection | Fits a research-scale workload. Use `db_multi_az` for automatic failover (about 2× the cost). |
-| Encryption | One customer-managed KMS key per instance | Covers the database, secrets, logs and images. TLS from browser to ALB, and from app to database (`rds.force_ssl`). **The ALB→app hop is plain HTTP inside the private app subnets.** See the open items below. |
+| Encryption | One customer-managed KMS key per instance | Covers the database, secrets, logs and images. TLS on every hop: browser to ALB (ACM certificate), ALB to app (a self-signed certificate the container generates at start), and app to database (`rds.force_ssl`). |
 | Database users | The app connects as `cloze_app`, which can read and write rows but not change the schema | The owner (RDS master user) is only used by the admin task definition, for setup and migrations. |
 | Compute | ECS Fargate on ARM64 (Graviton) | No servers to patch, and ~20% cheaper than x86. |
 | Secrets | SSM Parameter Store, under `/cloze-<instance>/` | Injected as environment variables at task start. API keys are set by hand, so they never enter Terraform state or git. |
@@ -136,7 +136,7 @@ aws ssm start-session --profile <profile> --target "ecs:<name>_${TASK}_${RUNTIME
   --document-name AWS-StartPortForwardingSession --parameters portNumber=8000,localPortNumber=8000
 ```
 
-Open http://localhost:8000/login in Chrome or Firefox. Safari won't keep the login cookie, which is marked secure, over plain `http://localhost`. In a second terminal, create the first admin. The password is typed at a hidden prompt:
+Open https://localhost:8000/login and accept the browser's warning about the self-signed certificate. In a second terminal, create the first admin. The password is typed at a hidden prompt:
 
 ```bash
 aws ecs execute-command --profile <profile> --cluster <name> --task "$TASK" \
@@ -157,14 +157,10 @@ ECS starts new tasks, waits for them to pass health checks, then drains the old 
 
 ## Requirements this places on the app
 
-- **An image built from the repo's `Dockerfile`**, whose default command runs gunicorn on port 8000. It must not start the dev server or seed data on boot.
+- **An image built from the repo's `Dockerfile`**, whose default command runs gunicorn with HTTPS on port 8000. It must not start the dev server or seed data on boot.
 - **A `GET /healthz` that returns 200 without logging in or touching the database.** The load balancer uses it to decide whether a task is alive.
 - **Setup commands for a fresh install:** `manage.py init-production`, which also creates the restricted database user from `CLOZE_APP_DATABASE_URL`, and `manage.py create-admin`.
 - **Only one web task**, until the in-process report scheduler moves out of the web app. Otherwise every task runs it (`web_desired_count` defaults to 1).
-
-## Open items
-
-- **ALB→app encryption.** This hop is HTTP inside the VPC, reachable only from the load balancer's security group. If your compliance office reads the BAA's in-transit requirement as covering traffic inside the VPC, switch the target group to HTTPS. Gunicorn would then serve TLS with a certificate generated at container start; the ALB doesn't validate target certificates. Ask before going live.
 
 ## Not managed here (on purpose)
 

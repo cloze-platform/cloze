@@ -9,9 +9,10 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# For weasyprint (PDF reports). Every Python dependency has a wheel, so no compiler.
+# Pango and HarfBuzz for weasyprint (PDF reports), openssl for the entrypoint.
+# Every Python dependency has a wheel, so no compiler.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
+    && apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b openssl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -26,4 +27,7 @@ USER cloze
 
 EXPOSE 8000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4", "--timeout", "120", "--access-logfile", "-", "llm_chat:create_app()"]
+# HTTPS on 8000, with a certificate the entrypoint generates at start.
+ENTRYPOINT ["sh", "/app/scripts/docker-entrypoint.sh"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--certfile", "/tmp/tls/cert.pem", "--keyfile", "/tmp/tls/key.pem", \
+     "--workers", "2", "--threads", "4", "--timeout", "120", "--access-logfile", "-", "llm_chat:create_app()"]
