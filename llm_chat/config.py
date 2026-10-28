@@ -67,6 +67,9 @@ def load_config():
         # Dev fallback only: a random key means sessions reset on every restart.
         "SECRET_KEY": secret_key or secrets.token_hex(32),
         "SQLALCHEMY_DATABASE_URI": database_url or "sqlite:///llm_chat.db",
+        # Setup only: the restricted user the web app connects as, which
+        # `manage.py init-production` creates (see utils/db_roles.py).
+        "CLOZE_APP_DATABASE_URL": _env("CLOZE_APP_DATABASE_URL"),
         "SQLALCHEMY_TRACK_MODIFICATIONS": False,
         "SESSION_COOKIE_SECURE": production,
         "SESSION_COOKIE_HTTPONLY": True,

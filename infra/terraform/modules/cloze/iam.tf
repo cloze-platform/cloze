@@ -32,7 +32,7 @@ data "aws_iam_policy_document" "execution_secrets" {
   statement {
     sid       = "ReadAppSecrets"
     actions   = ["ssm:GetParameters"]
-    resources = values(local.container_secrets)
+    resources = distinct(concat(values(local.container_secrets), values(local.admin_container_secrets)))
   }
 
   statement {

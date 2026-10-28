@@ -1,6 +1,6 @@
 # Secrets live in SSM under /<name>/ and reach containers as environment
-# variables. SECRET_KEY and DATABASE_URL are generated here, so they're also in
-# Terraform state. Each of var.llm_providers gets an API key placeholder that is
+# variables. SECRET_KEY and the database URLs are generated here, so they're also
+# in Terraform state. Each of var.llm_providers gets an API key placeholder that is
 # set by hand (see the README), so the keys never touch state or git. Providers
 # not listed get no key at all, which the app reads as "not configured".
 
@@ -30,7 +30,21 @@ resource "aws_ssm_parameter" "secret_key" {
 
 resource "aws_ssm_parameter" "database_url" {
   name        = "${local.ssm_prefix}/DATABASE_URL"
-  description = "SQLAlchemy URL for the app database (TLS required)."
+  description = "The app's database connection, as the restricted cloze_app user."
+  type        = "SecureString"
+  key_id      = aws_kms_key.data.arn
+  value = format(
+    "postgresql://%s:%s@%s/%s?sslmode=require",
+    "cloze_app",
+    random_password.db_app.result,
+    aws_db_instance.main.endpoint,
+    aws_db_instance.main.db_name,
+  )
+}
+
+resource "aws_ssm_parameter" "database_owner_url" {
+  name        = "${local.ssm_prefix}/DATABASE_OWNER_URL"
+  description = "The database owner's connection, for setup and migrations only."
   type        = "SecureString"
   key_id      = aws_kms_key.data.arn
   value = format(
@@ -65,4 +79,11 @@ locals {
     },
     { for k, p in aws_ssm_parameter.external : k => p.arn },
   )
+
+  # The admin task connects as the owner, and init-production reads the app
+  # user's URL to create that user.
+  admin_container_secrets = merge(local.container_secrets, {
+    DATABASE_URL           = aws_ssm_parameter.database_owner_url.arn
+    CLOZE_APP_DATABASE_URL = aws_ssm_parameter.database_url.arn
+  })
 }

@@ -1,9 +1,16 @@
-# The master password reaches the app inside DATABASE_URL (secrets.tf). It isn't
-# auto-rotated: the app only reads DATABASE_URL at startup.
+# The master user owns the schema and is only used by the admin task (setup and
+# migrations). The app connects as cloze_app, which `manage.py init-production`
+# creates with row access only. Neither password is auto-rotated: the app only
+# reads DATABASE_URL at startup.
 
 resource "random_password" "db" {
   length  = 40
   special = false # nothing to URL-escape in DATABASE_URL
+}
+
+resource "random_password" "db_app" {
+  length  = 40
+  special = false
 }
 
 resource "aws_db_subnet_group" "main" {

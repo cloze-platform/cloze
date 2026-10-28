@@ -1,5 +1,8 @@
-# The web service only exists once HTTPS is on, but its task definition is
-# created on the first apply so one-off tasks can use it before then.
+# Two task definitions on the same image:
+#   web   - the app, as the restricted database user. The service only exists
+#           once HTTPS is on, but one-off tasks can run it before then.
+#   admin - one-off tasks as the database owner: init-production by default,
+#           or migrations (see the README).
 
 resource "aws_ecs_cluster" "main" {
   name = var.name
@@ -7,6 +10,12 @@ resource "aws_ecs_cluster" "main" {
 
 resource "aws_cloudwatch_log_group" "web" {
   name              = "/${var.name}/web"
+  retention_in_days = var.log_retention_days
+  kms_key_id        = aws_kms_key.data.arn
+}
+
+resource "aws_cloudwatch_log_group" "admin" {
+  name              = "/${var.name}/admin"
   retention_in_days = var.log_retention_days
   kms_key_id        = aws_kms_key.data.arn
 }
@@ -25,6 +34,15 @@ locals {
     var.guard_sender_email == "" ? {} : { CLOZE_GUARD_SENDER = var.guard_sender_email },
     var.extra_environment,
   )
+
+  container_common = {
+    image     = local.image
+    essential = true
+    # ECS wants lists of {name, value}.
+    environment = [for k in sort(keys(local.environment)) : { name = k, value = local.environment[k] }]
+    # Required for ECS Exec.
+    linuxParameters = { initProcessEnabled = true }
+  }
 }
 
 # --- Web -----------------------------------------------------------------------
@@ -43,16 +61,10 @@ resource "aws_ecs_task_definition" "web" {
     cpu_architecture        = var.cpu_architecture
   }
 
-  container_definitions = jsonencode([merge({
-    name      = "web"
-    image     = local.image
-    essential = true
-    # ECS wants lists of {name, value}.
-    environment  = [for k in sort(keys(local.environment)) : { name = k, value = local.environment[k] }]
+  container_definitions = jsonencode([merge(local.container_common, {
+    name         = "web"
     secrets      = [for k in sort(keys(local.container_secrets)) : { name = k, valueFrom = local.container_secrets[k] }]
     portMappings = [{ containerPort = var.container_port, protocol = "tcp" }]
-    # Required for ECS Exec.
-    linuxParameters = { initProcessEnabled = true }
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -62,6 +74,35 @@ resource "aws_ecs_task_definition" "web" {
       }
     }
   }, var.web_command == null ? {} : { command = var.web_command })])
+}
+
+resource "aws_ecs_task_definition" "admin" {
+  family                   = "${var.name}-admin"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = var.web_cpu
+  memory                   = var.web_memory
+  execution_role_arn       = aws_iam_role.execution.arn
+  task_role_arn            = aws_iam_role.task.arn
+
+  runtime_platform {
+    operating_system_family = "LINUX"
+    cpu_architecture        = var.cpu_architecture
+  }
+
+  container_definitions = jsonencode([merge(local.container_common, {
+    name    = "admin"
+    command = ["python", "manage.py", "init-production"]
+    secrets = [for k in sort(keys(local.admin_container_secrets)) : { name = k, valueFrom = local.admin_container_secrets[k] }]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        awslogs-group         = aws_cloudwatch_log_group.admin.name
+        awslogs-region        = var.region
+        awslogs-stream-prefix = "admin"
+      }
+    }
+  })])
 }
 
 resource "aws_ecs_service" "web" {

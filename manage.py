@@ -6,6 +6,7 @@ import secrets
 import sys
 import time
 from flask import Flask
+from sqlalchemy.engine import make_url
 from llm_chat import create_app
 from llm_chat.extensions import db
 from llm_chat.models import (
@@ -13,6 +14,7 @@ from llm_chat.models import (
     Model, Conversation, Message, ChatWindow, ChatTemplate, SafetyPlan
 )
 from llm_chat.services.llm_interface import LLMInterface
+from llm_chat.utils.db_roles import ensure_app_user
 from llm_chat.utils.passwords import validate_password
 
 app: Flask = create_app()
@@ -428,6 +430,17 @@ def initialize_database(demo=True):
             db.session.rollback()
             print(f"Database initialization completed with some existing data: {e}")
 
+def init_production():
+    """Tables and reference data, then the app's restricted database user if
+    CLOZE_APP_DATABASE_URL is set. Run as the database owner."""
+    initialize_database(demo=False)
+    app_url = app.config["CLOZE_APP_DATABASE_URL"]
+    if app_url:
+        with app.app_context():
+            ensure_app_user(db.engine, app_url)
+        print(f"Database user {make_url(app_url).username!r} is up to date.")
+
+
 def create_admin(username, email):
     """Create an admin account, prompting for the password so it stays out of
     shell history and logs."""
@@ -453,7 +466,7 @@ if __name__ == "__main__":
     commands = parser.add_subparsers(dest="command")
     commands.add_parser(
         "init-production",
-        help="Create tables, models and system prompts, with no demo accounts or data.")
+        help="Create tables, models and system prompts (no demo data), and the app's database user.")
     create_admin_cmd = commands.add_parser(
         "create-admin", help="Create an admin account (prompts for the password).")
     create_admin_cmd.add_argument("username")
@@ -461,7 +474,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.command == "init-production":
-        initialize_database(demo=False)
+        init_production()
     elif args.command == "create-admin":
         create_admin(args.username, args.email)
     else:

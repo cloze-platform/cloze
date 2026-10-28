@@ -57,6 +57,10 @@ output "web_task_definition" {
   value = aws_ecs_task_definition.web.family
 }
 
+output "admin_task_definition" {
+  value = aws_ecs_task_definition.admin.family
+}
+
 output "app_subnet_ids" {
   value = aws_subnet.app[*].id
 }

@@ -34,11 +34,12 @@ This folder builds one complete Cloze instance inside a dedicated AWS account: n
 | Outbound | One NAT gateway (per-AZ is optional) | The app must call the LLM APIs. One NAT is ~$33/mo, and an AZ outage would only cut outbound calls. |
 | Database | RDS PostgreSQL 17, `db.t4g.small`, single-AZ, 14-day point-in-time recovery, deletion protection | Fits a research-scale workload. Use `db_multi_az` for automatic failover (about 2× the cost). |
 | Encryption | One customer-managed KMS key per instance | Covers the database, secrets, logs and images. TLS from browser to ALB, and from app to database (`rds.force_ssl`). **The ALB→app hop is plain HTTP inside the private app subnets.** See the open items below. |
+| Database users | The app connects as `cloze_app`, which can read and write rows but not change the schema | The owner (RDS master user) is only used by the admin task definition, for setup and migrations. |
 | Compute | ECS Fargate on ARM64 (Graviton) | No servers to patch, and ~20% cheaper than x86. |
 | Secrets | SSM Parameter Store, under `/cloze-<instance>/` | Injected as environment variables at task start. API keys are set by hand, so they never enter Terraform state or git. |
 | Image builds | CodeBuild in the instance's account, from a commit on GitHub | No Docker needed locally, and an image can only contain committed code: nothing from anyone's working tree. |
 | Deploys | Immutable image tags (git SHA); automatic rollback | The running code is always identifiable, and a broken deploy reverts itself. |
-| Admin access | ECS Exec (`aws ecs execute-command`) | A shell inside a running task, for migrations. No SSH and no bastion host, and every session is logged in CloudTrail. |
+| Admin access | One-off tasks and ECS Exec (`aws ecs execute-command`) | No SSH and no bastion host, and every session is logged in CloudTrail. |
 | Safety rail | `allowed_account_ids` in the provider | Terraform refuses to touch any account other than the instance's own. |
 
 **Rough cost** (us-east-1, idle-to-light use): about **$115–125/month**.
@@ -114,13 +115,12 @@ OUT=$(terraform output -json cloze)
 NET="awsvpcConfiguration={subnets=[$(echo "$OUT" | jq -r '.app_subnet_ids | join(",")')],securityGroups=[$(echo "$OUT" | jq -r .app_security_group_id)],assignPublicIp=DISABLED}"
 ```
 
-Create the tables, models and system prompts (no demo accounts or data):
+Run the admin task, which connects as the database owner and runs `manage.py init-production`. That creates the tables, models and system prompts (no demo accounts or data), then the `cloze_app` user the app connects as:
 
 ```bash
-aws ecs run-task --profile <profile> --cluster <name> --task-definition <name>-web \
-  --launch-type FARGATE --network-configuration "$NET" \
-  --overrides '{"containerOverrides":[{"name":"web","command":["python","manage.py","init-production"]}]}'
-aws logs tail /<name>/web --profile <profile> --follow   # ends "Database initialization complete (no demo data)."
+aws ecs run-task --profile <profile> --cluster <name> --task-definition <name>-admin \
+  --launch-type FARGATE --network-configuration "$NET"
+aws logs tail /<name>/admin --profile <profile> --follow   # ends "Database user 'cloze_app' is up to date."
 ```
 
 Then start the app itself, with ECS Exec on, and forward its port to your machine:
@@ -150,7 +150,7 @@ Log in, check a chat works, then stop the task: `aws ecs stop-task --profile <pr
 ## Deploying a new version
 
 1. Build it (step 7) from the release tag or commit.
-2. If the release adds database columns or tables, first run `migrate_schema.py` as a one-off task, like `init-production` in step 8, with the command `["python","migrate_schema.py","--apply"]`.
+2. If the release adds database columns or tables, first run the admin task (step 8) with `--overrides '{"containerOverrides":[{"name":"admin","command":["python","migrate_schema.py","--apply"]}]}'`.
 3. Set `image_tag` to the new commit SHA, then plan and apply.
 
 ECS starts new tasks, waits for them to pass health checks, then drains the old ones. If they never become healthy, it rolls back automatically.
@@ -159,13 +159,12 @@ ECS starts new tasks, waits for them to pass health checks, then drains the old 
 
 - **An image built from the repo's `Dockerfile`**, whose default command runs gunicorn on port 8000. It must not start the dev server or seed data on boot.
 - **A `GET /healthz` that returns 200 without logging in or touching the database.** The load balancer uses it to decide whether a task is alive.
-- **Setup commands for a fresh install:** `manage.py init-production` and `manage.py create-admin`.
+- **Setup commands for a fresh install:** `manage.py init-production`, which also creates the restricted database user from `CLOZE_APP_DATABASE_URL`, and `manage.py create-admin`.
 - **Only one web task**, until the in-process report scheduler moves out of the web app. Otherwise every task runs it (`web_desired_count` defaults to 1).
 
 ## Open items
 
 - **ALB→app encryption.** This hop is HTTP inside the VPC, reachable only from the load balancer's security group. If your compliance office reads the BAA's in-transit requirement as covering traffic inside the VPC, switch the target group to HTTPS. Gunicorn would then serve TLS with a certificate generated at container start; the ALB doesn't validate target certificates. Ask before going live.
-- **Database user.** The app connects as the RDS master user. A separate least-privilege app user would be better, created once with ECS Exec.
 
 ## Not managed here (on purpose)
 
