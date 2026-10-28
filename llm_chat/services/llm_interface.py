@@ -280,7 +280,6 @@ class LLMInterface:
         from pathlib import Path
 
         error_dir = Path(__file__).parent.parent.parent / 'instance' / 'llm_errors'
-        error_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = time.strftime('%Y%m%d_%H%M%S')
         filepath = error_dir / f"{timestamp}_gemini_safety_block.txt"
@@ -328,6 +327,7 @@ class LLMInterface:
             lines.append(content)
 
         try:
+            error_dir.mkdir(parents=True, exist_ok=True)
             filepath.write_text('\n'.join(lines), encoding='utf-8')
             print(f"Gemini safety block dump written to: {filepath}")
         except Exception as e:
@@ -340,7 +340,6 @@ class LLMInterface:
         from pathlib import Path
 
         error_dir = Path(__file__).parent.parent.parent / 'instance' / 'llm_errors'
-        error_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = time.strftime('%Y%m%d_%H%M%S')
         filename = f"{timestamp}_{model.provider}_{model.model_identifier.replace('/', '_')}.txt"
@@ -409,6 +408,7 @@ class LLMInterface:
             pass
 
         try:
+            error_dir.mkdir(parents=True, exist_ok=True)
             filepath.write_text('\n'.join(lines), encoding='utf-8')
             print(f"LLM error debug dump written to: {filepath}")
         except Exception as write_err:
