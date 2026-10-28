@@ -166,6 +166,16 @@ variable "source_repository" {
 # App settings
 # ---------------------------------------------------------------------------
 
+variable "llm_providers" {
+  description = "LLM providers the instance uses: any of openai, anthropic, google. Only their API keys are created and passed to the app."
+  type        = set(string)
+
+  validation {
+    condition     = length(var.llm_providers) > 0 && length(setsubtract(var.llm_providers, ["openai", "anthropic", "google"])) == 0
+    error_message = "llm_providers must list at least one of openai, anthropic, google."
+  }
+}
+
 variable "reports_enabled" {
   description = "Report generation (NLP analysis and AI summaries). False turns it off instance-wide, overriding admin and provider settings."
   type        = bool

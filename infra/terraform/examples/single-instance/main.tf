@@ -42,9 +42,10 @@ provider "aws" {
 module "cloze" {
   source = "../../modules/cloze"
 
-  name        = "cloze-${var.instance}"
-  region      = var.region
-  domain_name = var.domain_name
+  name          = "cloze-${var.instance}"
+  region        = var.region
+  domain_name   = var.domain_name
+  llm_providers = var.llm_providers
 
   enable_https       = var.enable_https
   image_tag          = var.image_tag

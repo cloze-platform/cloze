@@ -1,16 +1,18 @@
 # Secrets live in SSM under /<name>/ and reach containers as environment
 # variables. SECRET_KEY and DATABASE_URL are generated here, so they're also in
-# Terraform state. API keys get a placeholder and are set by hand (see the
-# README), so they never touch state or git.
+# Terraform state. Each of var.llm_providers gets an API key placeholder that is
+# set by hand (see the README), so the keys never touch state or git. Providers
+# not listed get no key at all, which the app reads as "not configured".
 
 locals {
   ssm_prefix = "/${var.name}"
 
-  external_secret_names = [
-    "OPENAI_API_KEY",
-    "ANTHROPIC_API_KEY",
-    "GOOGLE_API_KEY",
-  ]
+  api_key_names = {
+    openai    = "OPENAI_API_KEY"
+    anthropic = "ANTHROPIC_API_KEY"
+    google    = "GOOGLE_API_KEY"
+  }
+  external_secret_names = [for p in var.llm_providers : local.api_key_names[p]]
 }
 
 resource "random_password" "secret_key" {

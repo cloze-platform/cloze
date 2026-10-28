@@ -23,6 +23,11 @@ variable "domain_name" {
   type        = string
 }
 
+variable "llm_providers" {
+  description = "LLM providers the instance uses: any of openai, anthropic, google."
+  type        = set(string)
+}
+
 variable "enable_https" {
   description = "See enable_https in modules/cloze/variables.tf."
   type        = bool

@@ -90,7 +90,7 @@ This creates the network, database, secrets, image registry and build project, t
 
 **5. Add the certificate validation record** at your DNS host: the CNAME under `cloze.certificate_validation_records` in `terraform output`. If it's Cloudflare, set it to **DNS only** (grey cloud).
 
-**6. Set the API keys** that Terraform created as placeholders (listed in `cloze.secrets_to_set_by_hand`). Set only the providers the instance uses. Typing `read -s` keeps the key out of your shell history:
+**6. Set the API keys** for the providers in `llm_providers`. Terraform created them as placeholders, listed in `cloze.secrets_to_set_by_hand`. Typing the key at `read -s` keeps it out of your shell history:
 
 ```bash
 read -rs KEY && aws ssm put-parameter --profile <profile> --overwrite --type SecureString \
