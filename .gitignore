@@ -65,3 +65,12 @@ Dockerfile.ollama
 docker-compose.yml
 .DS_Store
 .DS_Store
+
+# Terraform: per-instance values, local state and plans stay out of git
+# (.terraform.lock.hcl IS committed)
+infra/terraform/**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+infra/terraform/instances/*/terraform.tfvars
+infra/terraform/instances/*/backend.hcl
