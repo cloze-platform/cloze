@@ -1,14 +1,9 @@
-# PostgreSQL on RDS: private subnets only, encrypted with the instance key,
-# TLS required for every connection.
-#
-# The master password is generated here and handed to the app inside
-# DATABASE_URL (see secrets.tf). It is not auto-rotated: the app reads
-# DATABASE_URL once at startup, so a rotation would break new connections
-# until every task restarted.
+# The master password reaches the app inside DATABASE_URL (secrets.tf). It isn't
+# auto-rotated: the app only reads DATABASE_URL at startup.
 
 resource "random_password" "db" {
   length  = 40
-  special = false # keeps DATABASE_URL free of characters that need escaping
+  special = false # nothing to URL-escape in DATABASE_URL
 }
 
 resource "aws_db_subnet_group" "main" {

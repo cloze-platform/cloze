@@ -1,7 +1,6 @@
 # Traffic is only allowed along these paths:
 #   internet -> ALB (80, 443) -> web tasks (container_port) -> database (5432)
-#   worker tasks -> database (5432)
-#   web/worker tasks -> internet (HTTPS out, via NAT) for LLM APIs, SES, ECR, logs
+#   app tasks -> internet (HTTPS out, via NAT) for LLM APIs, SES, ECR, logs
 
 resource "aws_security_group" "alb" {
   name        = "${var.name}-alb"
@@ -37,10 +36,9 @@ resource "aws_vpc_security_group_egress_rule" "alb_to_web" {
   to_port                      = var.container_port
 }
 
-# Shared by web and worker tasks.
 resource "aws_security_group" "app" {
   name        = "${var.name}-app"
-  description = "Cloze app containers (web and worker)"
+  description = "Cloze app containers"
   vpc_id      = aws_vpc.main.id
   tags        = { Name = "${var.name}-app" }
 }

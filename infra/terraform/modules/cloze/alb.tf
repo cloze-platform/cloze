@@ -1,11 +1,5 @@
-# HTTPS entry point. TLS terminates at the ALB with an ACM certificate.
-#
-# Two-step rollout (see var.enable_https):
-#   1. enable_https = false: the certificate is requested and its DNS validation
-#      records are output. Port 80 answers 503 "not ready"; nothing is served.
-#   2. Add those records at the DNS host. Once the certificate is "Issued", set
-#      enable_https = true: adds the HTTPS listener and the web service, and port
-#      80 starts redirecting to HTTPS.
+# TLS terminates here. Nothing is served until enable_https is set; see its
+# description in variables.tf.
 
 resource "aws_acm_certificate" "app" {
   domain_name       = var.domain_name
@@ -16,8 +10,7 @@ resource "aws_acm_certificate" "app" {
   }
 }
 
-# Waits for the certificate to be issued. Only declared once DNS is in place;
-# otherwise the apply would hang for the validation timeout.
+# Blocks until the certificate is issued, so it only exists once DNS is in place.
 resource "aws_acm_certificate_validation" "app" {
   count           = var.enable_https ? 1 : 0
   certificate_arn = aws_acm_certificate.app.arn

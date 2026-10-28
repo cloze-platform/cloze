@@ -1,7 +1,7 @@
-# Two availability zones, three tiers of subnet:
-#   public  - load balancer and NAT gateway(s); the only tier reachable from the internet
-#   app     - Fargate tasks; outbound internet (LLM APIs, SES) via NAT, no inbound except from the ALB
-#   db      - RDS; no route to the internet at all
+# Two AZs, three subnet tiers:
+#   public - ALB and NAT gateway(s)
+#   app    - Fargate tasks, outbound only (via NAT)
+#   db     - RDS, no internet route
 
 data "aws_availability_zones" "available" {
   state = "available"
@@ -10,8 +10,7 @@ data "aws_availability_zones" "available" {
 locals {
   azs     = slice(data.aws_availability_zones.available.names, 0, 2)
   nat_azs = var.nat_gateway_per_az ? local.azs : [local.azs[0]]
-  # Subnet i of each tier is in local.azs[i]; e.g. with 10.40.0.0/16:
-  # public 10.40.0-1.0/24, app 10.40.10-11.0/24, db 10.40.20-21.0/24.
+  # With 10.40.0.0/16: public 10.40.0-1.0/24, app 10.40.10-11.0/24, db 10.40.20-21.0/24.
   public_cidrs = [for i, _ in local.azs : cidrsubnet(var.vpc_cidr, 8, i)]
   app_cidrs    = [for i, _ in local.azs : cidrsubnet(var.vpc_cidr, 8, 10 + i)]
   db_cidrs     = [for i, _ in local.azs : cidrsubnet(var.vpc_cidr, 8, 20 + i)]
@@ -24,7 +23,7 @@ resource "aws_vpc" "main" {
   tags                 = { Name = var.name }
 }
 
-# Remove the rules from the VPC's default security group so nothing can use it by accident.
+# Strip the default security group's rules so nothing uses it by accident.
 resource "aws_default_security_group" "default" {
   vpc_id = aws_vpc.main.id
   tags   = { Name = "${var.name}-default-unused" }
@@ -104,8 +103,7 @@ resource "aws_route_table_association" "app" {
   route_table_id = aws_route_table.app[count.index].id
 }
 
-# Free gateway endpoint: container image layers (stored in S3) bypass the NAT
-# gateway, which avoids NAT data charges on every deploy.
+# Free, and keeps image pulls (ECR layers live in S3) off the NAT data bill.
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.${var.region}.s3"

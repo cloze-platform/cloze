@@ -20,8 +20,13 @@ output "load_balancer_dns_name" {
 }
 
 output "ecr_repository_url" {
-  description = "Push app images here, tagged with the git commit SHA."
+  description = "Where the build project pushes images, tagged with the git commit SHA."
   value       = aws_ecr_repository.app.repository_url
+}
+
+output "build_project_name" {
+  description = "Build an image with `aws codebuild start-build --project-name <this>` (see the README)."
+  value       = aws_codebuild_project.image.name
 }
 
 output "nat_public_ips" {
@@ -45,4 +50,17 @@ output "db_endpoint" {
 
 output "web_log_group" {
   value = aws_cloudwatch_log_group.web.name
+}
+
+# For one-off tasks with `aws ecs run-task` (see the README).
+output "web_task_definition" {
+  value = aws_ecs_task_definition.web.family
+}
+
+output "app_subnet_ids" {
+  value = aws_subnet.app[*].id
+}
+
+output "app_security_group_id" {
+  value = aws_security_group.app.id
 }

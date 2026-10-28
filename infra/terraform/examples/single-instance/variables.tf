@@ -24,20 +24,21 @@ variable "domain_name" {
 }
 
 variable "enable_https" {
-  description = "Set true once the ACM certificate's DNS records are in place. See modules/cloze/alb.tf."
+  description = "See enable_https in modules/cloze/variables.tf."
   type        = bool
   default     = false
 }
 
 variable "image_tag" {
-  description = "Image tag (git SHA) to run."
+  description = "Image to run: the full git commit SHA the build project pushed."
   type        = string
   default     = "bootstrap"
 }
 
-variable "enable_reports_worker" {
-  type    = bool
-  default = false
+variable "reports_enabled" {
+  description = "Report generation (NLP analysis and AI summaries). False turns it off for the whole instance."
+  type        = bool
+  default     = true
 }
 
 variable "guard_sender_email" {

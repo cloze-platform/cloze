@@ -1,8 +1,7 @@
 resource "aws_ecr_repository" "app" {
   name = var.name
 
-  # Each image is pushed under its git commit SHA and never overwritten, so
-  # the task definition always says exactly which code is running.
+  # Tags are commit SHAs and can't be overwritten, so a task definition pins exact code.
   image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {

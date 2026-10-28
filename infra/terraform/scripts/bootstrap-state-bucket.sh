@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
-# Creates the S3 bucket that holds Terraform state for one AWS account.
-# Run once per account, before the first `terraform init`.
+# Creates the Terraform state bucket for one AWS account. Run once per account,
+# before the first `terraform init`; safe to re-run.
 #
 #   scripts/bootstrap-state-bucket.sh <aws-profile> <expected-account-id> [region]
 #
-# The bucket is named cloze-tfstate-<account-id>. It is versioned (so a bad
-# state write can be rolled back), encrypted, never public, and refuses
-# non-TLS access. Terraform's own S3 lockfile handles locking, so no DynamoDB
-# table is needed. Safe to re-run: every step is idempotent.
+# Versioned, encrypted, private and TLS-only. Locking uses Terraform's S3
+# lockfile, so there's no DynamoDB table.
 
 set -euo pipefail
 
@@ -58,7 +56,6 @@ aws s3api put-bucket-policy --bucket "$BUCKET" --profile "$PROFILE" --policy "$(
 EOF
 )"
 
-# Old state versions are only for recovery; don't keep them forever.
 aws s3api put-bucket-lifecycle-configuration --bucket "$BUCKET" --profile "$PROFILE" \
   --lifecycle-configuration \
   '{"Rules":[{"ID":"expire-old-state-versions","Status":"Enabled","Filter":{},"NoncurrentVersionExpiration":{"NoncurrentDays":90}}]}'

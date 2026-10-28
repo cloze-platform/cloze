@@ -28,26 +28,15 @@ variable "domain_name" {
 # ---------------------------------------------------------------------------
 
 variable "enable_https" {
-  description = <<-EOT
-    Leave false on the first apply. That apply creates the ACM certificate and outputs
-    the DNS records needed to validate it. Once those records are in DNS and the
-    certificate shows "Issued", set true: this adds the HTTPS listener and the web service.
-    The app is never served over plain HTTP.
-  EOT
+  description = "False on the first apply, which requests the certificate and outputs its DNS validation records. Set true once it's issued: this adds the HTTPS listener and starts the web service."
   type        = bool
   default     = false
 }
 
 variable "image_tag" {
-  description = "Tag of the image in this instance's ECR repository to run (we use the git commit SHA)."
+  description = "Commit SHA of the image to run, as pushed to ECR by the build project."
   type        = string
   default     = "bootstrap"
-}
-
-variable "enable_reports_worker" {
-  description = "Run the reports worker service (`flask reports-worker`). Only exists on branches with the v2 report system."
-  type        = bool
-  default     = false
 }
 
 # ---------------------------------------------------------------------------
@@ -117,7 +106,7 @@ variable "db_deletion_protection" {
 # ---------------------------------------------------------------------------
 
 variable "cpu_architecture" {
-  description = "ARM64 (Graviton, ~20% cheaper, native for Apple-silicon builds) or X86_64. Must match the pushed image."
+  description = "ARM64 (Graviton, ~20% cheaper) or X86_64."
   type        = string
   default     = "ARM64"
 
@@ -158,36 +147,30 @@ variable "web_desired_count" {
 }
 
 variable "web_command" {
-  description = "Command the web container runs."
+  description = "Override the image's command (gunicorn; see the Dockerfile)."
   type        = list(string)
-  default = [
-    "gunicorn", "--bind", "0.0.0.0:8000",
-    "--workers", "2", "--threads", "4", "--timeout", "120",
-    "--access-logfile", "-", "manage:app",
-  ]
+  default     = null
 }
 
-variable "worker_cpu" {
-  description = "Fargate CPU units for the reports worker."
-  type        = number
-  default     = 1024
-}
+# ---------------------------------------------------------------------------
+# Image build
+# ---------------------------------------------------------------------------
 
-variable "worker_memory" {
-  description = "Fargate memory (MiB) for the reports worker."
-  type        = number
-  default     = 2048
-}
-
-variable "worker_command" {
-  description = "Command the reports worker container runs."
-  type        = list(string)
-  default     = ["flask", "--app", "manage:app", "reports-worker"]
+variable "source_repository" {
+  description = "Public git repository the build project clones."
+  type        = string
+  default     = "https://github.com/cloze-platform/cloze.git"
 }
 
 # ---------------------------------------------------------------------------
 # App settings
 # ---------------------------------------------------------------------------
+
+variable "reports_enabled" {
+  description = "Report generation (NLP analysis and AI summaries). False turns it off instance-wide, overriding admin and provider settings."
+  type        = bool
+  default     = true
+}
 
 variable "guard_sender_email" {
   description = "From address for Cloze-Guard alerts (must be on the verified SES domain). Empty disables alert emails."

@@ -1,7 +1,5 @@
-# One customer-managed key for everything holding participant data or secrets:
-# the database, SSM SecureString parameters, container logs and images.
-# Disabling or scheduling deletion of this key makes all of it unreadable, so
-# it is protected from `terraform destroy`.
+# One key for everything holding participant data or secrets: the database,
+# SSM parameters, logs and images. Losing it loses all of that.
 
 data "aws_caller_identity" "current" {}
 
@@ -26,7 +24,7 @@ resource "aws_kms_alias" "data" {
 }
 
 data "aws_iam_policy_document" "kms_data" {
-  # Standard default: IAM policies in this account decide who may use the key.
+  # AWS default: IAM policies in the account control access.
   statement {
     sid       = "AccountIAMControlsAccess"
     actions   = ["kms:*"]

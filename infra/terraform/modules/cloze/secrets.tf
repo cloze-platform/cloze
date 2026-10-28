@@ -1,15 +1,7 @@
-# App secrets live in SSM Parameter Store under /<name>/, encrypted with the
-# instance key, and are injected into containers as environment variables
-# when each task starts.
-#
-# Two kinds:
-#   generated - Terraform creates the value (so it is also in Terraform state,
-#               which is why the state bucket is encrypted and private)
-#   external  - Terraform creates a placeholder and never touches the value
-#               again. A person sets the real value once with:
-#                 aws ssm put-parameter --overwrite --type SecureString \
-#                   --name /<name>/OPENAI_API_KEY --value '...'
-#               These values are never in Terraform state or in git.
+# Secrets live in SSM under /<name>/ and reach containers as environment
+# variables. SECRET_KEY and DATABASE_URL are generated here, so they're also in
+# Terraform state. API keys get a placeholder and are set by hand (see the
+# README), so they never touch state or git.
 
 locals {
   ssm_prefix = "/${var.name}"

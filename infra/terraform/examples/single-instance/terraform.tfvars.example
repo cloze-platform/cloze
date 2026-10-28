@@ -6,7 +6,7 @@ region         = "us-east-1"
 domain_name    = "cloze.example.org"
 
 # Rollout switches - see infra/terraform/README.md
-enable_https          = false
-image_tag             = "bootstrap"
-enable_reports_worker = false
-guard_sender_email    = ""
+enable_https       = false
+image_tag          = "bootstrap"
+reports_enabled    = true
+guard_sender_email = ""

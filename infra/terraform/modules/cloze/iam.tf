@@ -1,8 +1,5 @@
-# Two roles per ECS convention:
-#   execution role - used by ECS itself to pull the image, write logs and read
-#                    the SSM secrets at task start. The app code never sees it.
-#   task role      - the AWS identity the app code runs as. It may only send
-#                    email from the instance's domain, plus ECS Exec for admins.
+# Execution role: what ECS uses to pull the image, write logs and read secrets.
+# Task role: what the app runs as. It can send email from the instance domain.
 
 data "aws_iam_policy_document" "ecs_tasks_assume" {
   statement {
@@ -67,8 +64,7 @@ data "aws_iam_policy_document" "task" {
     ]
   }
 
-  # `aws ecs execute-command` - how admins get a shell in a running task
-  # (e.g. to run migrate_schema.py). Every session is recorded in CloudTrail.
+  # ECS Exec (`aws ecs execute-command`), for admin shells in a task.
   statement {
     sid = "EcsExec"
     actions = [
