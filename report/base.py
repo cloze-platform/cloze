@@ -7,6 +7,7 @@ renderers, and analyzers must follow.
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List
+from llm_chat.extensions import db
 from llm_chat.models import ChatWindow, Conversation, Message
 
 
@@ -40,7 +41,7 @@ class ReportComponent(ABC):
 
     def _load_data(self):
         """Load common data needed by most components."""
-        self.window = ChatWindow.query.get(self.window_id)
+        self.window = db.session.get(ChatWindow, self.window_id)
         if not self.window:
             raise ValueError(f"ChatWindow with id {self.window_id} not found")
 

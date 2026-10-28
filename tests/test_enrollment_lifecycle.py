@@ -11,7 +11,7 @@ import pytest
 
 from llm_chat.extensions import db as _db
 from llm_chat.models.chat import Model
-from llm_chat.models.chat_window import ChatWindow, ChatTemplate
+from llm_chat.models.chat_window import ChatWindow
 from llm_chat.models.core import ProviderPatient
 from llm_chat.models.study_flow import StudyFlow, FlowPhase, FlowChat, FlowEnrollment
 

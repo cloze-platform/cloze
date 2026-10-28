@@ -69,7 +69,6 @@ def get_provider_patients():
 @role_required('provider')
 def get_all_provider_conversations():
     """Get all conversations AND unstarted templates across all patients."""
-    from ..models import Message, Model
     patient_ids = [pp.patient_id for pp in current_user.patients]
     if not patient_ids:
         return jsonify([])
@@ -153,7 +152,7 @@ def get_all_provider_conversations():
 def get_patient_conversations(patient_id):
     if not current_user.can_access_patient(patient_id):
         abort(403)
-    patient = User.query.get_or_404(patient_id)
+    patient = db.get_or_404(User, patient_id)
     conversations = patient.conversations.order_by(Conversation.updated_at.desc()).all()
     return jsonify([{
         'id': c.id,
@@ -318,7 +317,7 @@ def reset_patient_password(patient_id):
     if not current_user.can_access_patient(patient_id):
         abort(403)
 
-    patient = User.query.get_or_404(patient_id)
+    patient = db.get_or_404(User, patient_id)
     if not patient.is_patient():
         return jsonify({'error': 'User is not a patient'}), 400
 
@@ -352,7 +351,7 @@ def rename_patient(patient_id):
     if not current_user.can_access_patient(patient_id):
         abort(403)
 
-    patient = User.query.get_or_404(patient_id)
+    patient = db.get_or_404(User, patient_id)
     if not patient.is_patient():
         return jsonify({'error': 'User is not a patient'}), 400
 
@@ -544,7 +543,7 @@ def get_provider_escalation_events():
 @role_required('provider')
 def acknowledge_provider_escalation(event_id):
     """Provider acknowledges/resolves an event for one of their own patients."""
-    event = EscalationEvent.query.get_or_404(event_id)
+    event = db.get_or_404(EscalationEvent, event_id)
     if event.provider_id != current_user.id:
         abort(403)
     data = request.json or {}
@@ -603,7 +602,7 @@ def create_provider_prompt():
 @role_required('provider')
 def update_provider_prompt(prompt_id):
     """Provider edits a prompt they created."""
-    prompt = SystemPrompt.query.get_or_404(prompt_id)
+    prompt = db.get_or_404(SystemPrompt, prompt_id)
     if prompt.created_by != current_user.id:
         abort(403)
 
@@ -621,7 +620,7 @@ def update_provider_prompt(prompt_id):
 @role_required('provider')
 def delete_provider_prompt(prompt_id):
     """Provider soft-deletes a prompt they created."""
-    prompt = SystemPrompt.query.get_or_404(prompt_id)
+    prompt = db.get_or_404(SystemPrompt, prompt_id)
     if prompt.created_by != current_user.id:
         abort(403)
 
@@ -702,7 +701,7 @@ def create_flow():
 @role_required('provider')
 def get_flow(flow_id):
     """Get a single flow with full detail."""
-    flow = StudyFlow.query.get_or_404(flow_id)
+    flow = db.get_or_404(StudyFlow, flow_id)
     if flow.provider_id != current_user.id:
         abort(403)
 
@@ -715,7 +714,7 @@ def get_flow(flow_id):
 @role_required('provider')
 def update_flow(flow_id):
     """Update flow metadata."""
-    flow = StudyFlow.query.get_or_404(flow_id)
+    flow = db.get_or_404(StudyFlow, flow_id)
     if flow.provider_id != current_user.id:
         abort(403)
 
@@ -737,7 +736,7 @@ def update_flow(flow_id):
 @role_required('provider')
 def delete_flow(flow_id):
     """Delete a flow (only if no patients are enrolled)."""
-    flow = StudyFlow.query.get_or_404(flow_id)
+    flow = db.get_or_404(StudyFlow, flow_id)
     if flow.provider_id != current_user.id:
         abort(403)
     # Deletion stays blocked once anyone has ever been enrolled, withdrawn
@@ -762,7 +761,7 @@ def delete_flow(flow_id):
 @role_required('provider')
 def create_phase(flow_id):
     """Add a phase to a flow."""
-    flow = StudyFlow.query.get_or_404(flow_id)
+    flow = db.get_or_404(StudyFlow, flow_id)
     if flow.provider_id != current_user.id:
         abort(403)
 
@@ -785,7 +784,7 @@ def create_phase(flow_id):
 @role_required('provider')
 def update_phase(phase_id):
     """Update a phase."""
-    phase = FlowPhase.query.get_or_404(phase_id)
+    phase = db.get_or_404(FlowPhase, phase_id)
     if phase.flow.provider_id != current_user.id:
         abort(403)
 
@@ -807,7 +806,7 @@ def update_phase(phase_id):
 @role_required('provider')
 def delete_phase(phase_id):
     """Delete a phase and its chats."""
-    phase = FlowPhase.query.get_or_404(phase_id)
+    phase = db.get_or_404(FlowPhase, phase_id)
     if phase.flow.provider_id != current_user.id:
         abort(403)
 
@@ -822,7 +821,7 @@ def delete_phase(phase_id):
 @role_required('provider')
 def create_flow_chat(phase_id):
     """Add a chat to a phase."""
-    phase = FlowPhase.query.get_or_404(phase_id)
+    phase = db.get_or_404(FlowPhase, phase_id)
     if phase.flow.provider_id != current_user.id:
         abort(403)
 
@@ -861,7 +860,7 @@ def create_flow_chat(phase_id):
 @role_required('provider')
 def update_flow_chat(chat_id):
     """Update a chat."""
-    chat = FlowChat.query.get_or_404(chat_id)
+    chat = db.get_or_404(FlowChat, chat_id)
     if chat.phase.flow.provider_id != current_user.id:
         abort(403)
 
@@ -879,7 +878,7 @@ def update_flow_chat(chat_id):
 @role_required('provider')
 def delete_flow_chat(chat_id):
     """Delete a chat from a phase."""
-    chat = FlowChat.query.get_or_404(chat_id)
+    chat = db.get_or_404(FlowChat, chat_id)
     if chat.phase.flow.provider_id != current_user.id:
         abort(403)
 
@@ -897,7 +896,7 @@ DAY_SECONDS = 86400
 @role_required('provider')
 def enroll_patients(flow_id):
     """Enroll patients in a flow. Generates ChatWindows and ChatTemplates."""
-    flow = StudyFlow.query.get_or_404(flow_id)
+    flow = db.get_or_404(StudyFlow, flow_id)
     if flow.provider_id != current_user.id:
         abort(403)
 
@@ -1073,7 +1072,7 @@ def unenroll_patient(flow_id, patient_id):
     finished yet are hidden, which is enough to remove them from the
     participant's view and to make send_message reject further messages.
     """
-    flow = StudyFlow.query.get_or_404(flow_id)
+    flow = db.get_or_404(StudyFlow, flow_id)
     if flow.provider_id != current_user.id:
         abort(403)
     if not current_user.can_access_patient(patient_id):
@@ -1125,7 +1124,7 @@ def _hide_unfinished_windows(flow, patient_id, now):
 @role_required('provider')
 def get_enrollments(flow_id):
     """Get all enrollments for a flow with progress info."""
-    flow = StudyFlow.query.get_or_404(flow_id)
+    flow = db.get_or_404(StudyFlow, flow_id)
     if flow.provider_id != current_user.id:
         abort(403)
 

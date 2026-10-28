@@ -5,12 +5,11 @@ flagged. The email carries NO participant identity, NO flagged terms, and NO
 conversation reference — only that a safety notification needs attention, with
 a link to the secure dashboard where the details live.
 
-Authenticated by the EC2 instance IAM role in production. When boto3 or AWS
+Authenticated by the server's IAM role in production (EC2 instance role or ECS
+task role). When boto3 or AWS
 credentials/sender config are absent (e.g. local dev), this degrades to a
 logged no-op rather than raising.
 """
-
-import os
 
 from flask import current_app
 
@@ -18,8 +17,7 @@ SUBJECT = "[Cloze] Safety notification requires attention"
 
 
 def _dashboard_url():
-    base = os.environ.get("CLOZE_PUBLIC_URL", "https://cloze.uk").rstrip("/")
-    return base + "/provider/dashboard"
+    return current_app.config["CLOZE_PUBLIC_URL"] + "/provider/dashboard"
 
 
 def _text_body(url):
@@ -72,8 +70,8 @@ def send_guard_email(recipients, patient_id=None):
         recipients: comma-separated recipient address string.
         patient_id: used only for the server-side log line — never in the email.
     """
-    sender = os.environ.get("CLOZE_GUARD_SENDER")
-    region = os.environ.get("AWS_SES_REGION", "us-east-1")
+    sender = current_app.config["CLOZE_GUARD_SENDER"]
+    region = current_app.config["AWS_SES_REGION"]
 
     to_addresses = [e.strip() for e in (recipients or "").split(",") if e.strip()]
     if not sender or not to_addresses:
@@ -91,8 +89,8 @@ def send_guard_email(recipients, patient_id=None):
     url = _dashboard_url()
 
     # Local dev uses a named profile (CLOZE_GUARD_AWS_PROFILE=cloze); in prod
-    # the env var is unset and boto3 falls back to the EC2 instance role.
-    profile = os.environ.get("CLOZE_GUARD_AWS_PROFILE")
+    # it is unset and boto3 falls back to the instance or task role.
+    profile = current_app.config["CLOZE_GUARD_AWS_PROFILE"]
     session = boto3.Session(profile_name=profile) if profile else boto3.Session()
 
     try:

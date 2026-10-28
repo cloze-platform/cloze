@@ -1,11 +1,7 @@
-import os
 import time
 import json
 import requests
 from typing import List, Dict, Optional, Tuple
-
-# Ollama host configuration (default: localhost for local development)
-OLLAMA_HOST = os.environ.get('OLLAMA_HOST', 'http://localhost:11434')
 
 # Provider clients (optional imports)
 try:
@@ -29,10 +25,10 @@ class LLMInterface:
     _provider_clients: Dict[str, object] = {}
 
     @classmethod
-    def initialize_clients(cls):
-        """Initialize provider clients based on available API keys"""
+    def initialize_clients(cls, config):
+        """Initialize provider clients based on the API keys in the app config."""
         # OpenAI
-        openai_key = os.environ.get('OPENAI_API_KEY')
+        openai_key = config.get('OPENAI_API_KEY')
         if OpenAI and openai_key and openai_key.strip() and openai_key != 'your_openai_key_here':
             try:
                 cls._provider_clients['openai'] = OpenAI(api_key=openai_key)
@@ -52,7 +48,7 @@ class LLMInterface:
             print(f"✗ OpenAI API key not configured or invalid: {', '.join(reasons)}")
 
         # Anthropic
-        anthropic_key = os.environ.get('ANTHROPIC_API_KEY')
+        anthropic_key = config.get('ANTHROPIC_API_KEY')
         if Anthropic and anthropic_key and anthropic_key.strip() and anthropic_key != 'your_anthropic_key_here':
             try:
                 cls._provider_clients['anthropic'] = Anthropic(api_key=anthropic_key)
@@ -72,7 +68,7 @@ class LLMInterface:
             print(f"✗ Anthropic API key not configured or invalid: {', '.join(reasons)}")
 
         # Google
-        google_key = os.environ.get('GOOGLE_API_KEY')
+        google_key = config.get('GOOGLE_API_KEY')
         if genai and google_key and google_key.strip() and google_key != 'your_google_api_key_here':
             try:
                 client = genai.Client(api_key=google_key)
@@ -84,18 +80,19 @@ class LLMInterface:
             print("✗ Google API key not configured or invalid")
 
         # Local Ollama
+        ollama_host = config['OLLAMA_HOST']
         try:
-            ollama_url = f"{OLLAMA_HOST}/api/tags"
+            ollama_url = f"{ollama_host}/api/tags"
             response = requests.get(ollama_url, timeout=2)
             if response.status_code == 200:
                 cls._provider_clients['local'] = True
                 models = response.json().get('models', [])
                 model_names = [m['name'] for m in models]
-                print(f"✓ Ollama server detected at {OLLAMA_HOST} with models: {model_names}")
+                print(f"✓ Ollama server detected at {ollama_host} with models: {model_names}")
             else:
-                print(f"✗ Ollama server at {OLLAMA_HOST} responded but with an error")
+                print(f"✗ Ollama server at {ollama_host} responded but with an error")
         except requests.exceptions.RequestException:
-            print(f"✗ Ollama server not available at {OLLAMA_HOST}")
+            print(f"✗ Ollama server not available at {ollama_host}")
 
         print("\n=== LLM Client Status ===")
         print(f"Initialized providers: {list(cls._provider_clients.keys())}")
@@ -289,12 +286,12 @@ class LLMInterface:
         filepath = error_dir / f"{timestamp}_gemini_safety_block.txt"
 
         lines = [
-            f"Gemini Safety Block Debug Dump",
+            "Gemini Safety Block Debug Dump",
             f"{'=' * 60}",
             f"Timestamp:  {time.strftime('%Y-%m-%d %H:%M:%S')}",
             f"Model:      {model.model_identifier}",
             f"Config:     {json.dumps(config, indent=2)}",
-            f"",
+            "",
         ]
 
         # Response details
@@ -306,27 +303,27 @@ class LLMInterface:
                     lines.append(f"    finish_reason: {candidate.finish_reason}")
                     safety_ratings = getattr(candidate, 'safety_ratings', None)
                     if safety_ratings:
-                        lines.append(f"    safety_ratings:")
+                        lines.append("    safety_ratings:")
                         for rating in safety_ratings:
                             cat = getattr(rating, 'category', 'unknown')
                             prob = getattr(rating, 'probability', None) or getattr(rating, 'blocked', 'unknown')
                             lines.append(f"      {cat}: {prob}")
             prompt_feedback = getattr(response, 'prompt_feedback', None)
             if prompt_feedback:
-                lines.append(f"")
+                lines.append("")
                 lines.append(f"Prompt Feedback: {prompt_feedback}")
         except Exception as e:
             lines.append(f"Error reading response: {e}")
 
         # Full messages
-        lines.append(f"")
+        lines.append("")
         lines.append(f"{'=' * 60}")
         lines.append(f"MESSAGES ({len(messages)} total)")
         lines.append(f"{'=' * 60}")
         for i, msg in enumerate(messages):
             role = msg.get('role', 'unknown')
             content = msg.get('content', '')
-            lines.append(f"")
+            lines.append("")
             lines.append(f"--- Message {i + 1} [{role}] ({len(content)} chars) ---")
             lines.append(content)
 
@@ -350,20 +347,20 @@ class LLMInterface:
         filepath = error_dir / filename
 
         lines = [
-            f"LLM Error Debug Dump",
+            "LLM Error Debug Dump",
             f"{'=' * 60}",
             f"Timestamp:  {time.strftime('%Y-%m-%d %H:%M:%S')}",
             f"Provider:   {model.provider}",
             f"Model:      {model.model_identifier}",
             f"Model Name: {model.name}",
             f"Config:     {json.dumps(config, indent=2)}",
-            f"",
+            "",
             f"Error Type: {type(error).__name__}",
             f"Error:      {str(error)}",
-            f"",
-            f"Traceback:",
+            "",
+            "Traceback:",
             traceback.format_exc(),
-            f"",
+            "",
             f"{'=' * 60}",
             f"MESSAGES ({len(messages)} total)",
             f"{'=' * 60}",
@@ -372,16 +369,16 @@ class LLMInterface:
         for i, msg in enumerate(messages):
             role = msg.get('role', 'unknown')
             content = msg.get('content', '')
-            lines.append(f"")
+            lines.append("")
             lines.append(f"--- Message {i + 1} [{role}] ({len(content)} chars) ---")
             lines.append(content)
 
         # If it's a Gemini safety block, try to extract safety ratings
         try:
             if hasattr(error, '__cause__') and error.__cause__:
-                lines.append(f"")
+                lines.append("")
                 lines.append(f"{'=' * 60}")
-                lines.append(f"UNDERLYING CAUSE")
+                lines.append("UNDERLYING CAUSE")
                 lines.append(str(error.__cause__))
         except Exception:
             pass
@@ -394,16 +391,16 @@ class LLMInterface:
             caller_locals = frame.f_back.f_back.f_locals if frame else {}
             raw_response = caller_locals.get('response')
             if raw_response and hasattr(raw_response, 'candidates'):
-                lines.append(f"")
+                lines.append("")
                 lines.append(f"{'=' * 60}")
-                lines.append(f"RAW RESPONSE")
+                lines.append("RAW RESPONSE")
                 lines.append(f"Candidates: {len(raw_response.candidates) if raw_response.candidates else 0}")
                 if raw_response.candidates:
                     for j, candidate in enumerate(raw_response.candidates):
                         lines.append(f"  Candidate {j}:")
                         lines.append(f"    finish_reason: {candidate.finish_reason}")
                         if hasattr(candidate, 'safety_ratings') and candidate.safety_ratings:
-                            lines.append(f"    safety_ratings:")
+                            lines.append("    safety_ratings:")
                             for rating in candidate.safety_ratings:
                                 lines.append(f"      {rating.category}: {rating.probability}")
                 if hasattr(raw_response, 'prompt_feedback'):

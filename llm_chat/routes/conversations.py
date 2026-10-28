@@ -1,7 +1,7 @@
 import json
 import time
 from datetime import datetime
-from flask import Blueprint, render_template, jsonify, request, abort, redirect, url_for, current_app
+from flask import Blueprint, render_template, jsonify, request, abort, redirect, current_app
 from flask_login import login_required, current_user
 from ..extensions import db
 from ..models import (
@@ -9,7 +9,7 @@ from ..models import (
     Conversation, Model, Message, SavedSelection, ChatWindow, ChatTemplate
 )
 from ..services.llm_interface import LLMInterface
-from ..models import AdminSettings, ProviderFeatureFlags
+from ..models import ProviderFeatureFlags
 from ..utils.settings_resolution import get_effective_setting, get_provider_id_for_patient
 from ..utils.access_hours import within_access_window
 
@@ -104,7 +104,7 @@ def get_access_window():
 @conv_bp.route("/conversation/<int:conversation_id>")
 @login_required
 def view_conversation(conversation_id):
-    conversation = Conversation.query.get_or_404(conversation_id)
+    conversation = db.get_or_404(Conversation, conversation_id)
     if not current_user.can_access_patient(conversation.user_id):
         abort(403)
 
@@ -120,7 +120,7 @@ def view_conversation(conversation_id):
 
     # Check if conversation belongs to an expired window
     if conversation.window_id:
-        window = ChatWindow.query.get(conversation.window_id)
+        window = db.session.get(ChatWindow, conversation.window_id)
         if window:
             window_status = window.compute_status()
             window_id = window.id
@@ -132,7 +132,7 @@ def view_conversation(conversation_id):
 @conv_bp.route("/api/conversation/<int:conversation_id>")
 @login_required
 def get_conversation_data(conversation_id):
-    conversation = Conversation.query.get_or_404(conversation_id)
+    conversation = db.get_or_404(Conversation, conversation_id)
     if not current_user.can_access_patient(conversation.user_id):
         abort(403)
 
@@ -143,7 +143,7 @@ def get_conversation_data(conversation_id):
     window_id = None
     window_status = None
     if conversation.window_id:
-        window = ChatWindow.query.get(conversation.window_id)
+        window = db.session.get(ChatWindow, conversation.window_id)
         if window:
             window_end_date = window.end_date
             window_id = window.id
@@ -172,7 +172,7 @@ def get_conversation_data(conversation_id):
         },
         'system_prompt': None if not conversation.system_prompt_id else {
             'id': conversation.system_prompt_id,
-            'name': SystemPrompt.query.get(conversation.system_prompt_id).name if conversation.system_prompt_id else None
+            'name': db.session.get(SystemPrompt, conversation.system_prompt_id).name if conversation.system_prompt_id else None
         },
         'window_end_date': window_end_date,
         'window_status': window_status,
@@ -185,7 +185,7 @@ def get_conversation_data(conversation_id):
 @conv_bp.route("/api/conversation/<int:conversation_id>/title", methods=["PUT"])
 @login_required
 def update_conversation_title(conversation_id):
-    conversation = Conversation.query.get_or_404(conversation_id)
+    conversation = db.get_or_404(Conversation, conversation_id)
     if conversation.user_id != current_user.id:
         abort(403)
     data = request.json or {}
@@ -197,7 +197,7 @@ def update_conversation_title(conversation_id):
 @conv_bp.route("/api/conversation/<int:conversation_id>/consent", methods=["POST"])
 @login_required
 def mark_consent_provided(conversation_id):
-    conversation = Conversation.query.get_or_404(conversation_id)
+    conversation = db.get_or_404(Conversation, conversation_id)
     if conversation.user_id != current_user.id:
         abort(403)
     conversation.consent_provided = True
@@ -228,7 +228,7 @@ def get_conversations():
         is_active = c.visible
 
         if c.window_id:
-            window = ChatWindow.query.get(c.window_id)
+            window = db.session.get(ChatWindow, c.window_id)
             if window:
                 # Skip conversations in hidden windows
                 if not window.visible:
@@ -314,7 +314,7 @@ def get_conversations():
 @conv_bp.route("/api/conversation/<int:conversation_id>/message", methods=["POST"])
 @login_required
 def send_message(conversation_id):
-    conversation = Conversation.query.get_or_404(conversation_id)
+    conversation = db.get_or_404(Conversation, conversation_id)
 
     # Access check
     if conversation.user_id != current_user.id and not current_user.can_access_patient(conversation.user_id):
@@ -328,7 +328,7 @@ def send_message(conversation_id):
 
     # Check if conversation belongs to an expired window
     if conversation.window_id:
-        window = ChatWindow.query.get(conversation.window_id)
+        window = db.session.get(ChatWindow, conversation.window_id)
         if window:
             status = window.compute_status()
             if not window.visible or status != 'active':
@@ -499,7 +499,7 @@ def get_selections():
     if patient_id and (current_user.is_provider() or current_user.is_admin()):
         if not current_user.can_access_patient(int(patient_id)):
             abort(403)
-        target_user = User.query.get_or_404(int(patient_id))
+        target_user = db.get_or_404(User, int(patient_id))
         selections = target_user.saved_selections.order_by(SavedSelection.created_at.desc()).limit(50).all()
     else:
         selections = current_user.saved_selections.order_by(SavedSelection.created_at.desc()).limit(50).all()
@@ -522,7 +522,7 @@ def get_selections():
 @conv_bp.route("/api/selections/<int:selection_id>", methods=["DELETE"])
 @login_required
 def delete_selection(selection_id):
-    selection = SavedSelection.query.get_or_404(selection_id)
+    selection = db.get_or_404(SavedSelection, selection_id)
     if selection.user_id != current_user.id:
         abort(403)
 
@@ -635,7 +635,7 @@ def get_system_prompts():
                 provider_custom_instructions = settings.custom_instructions
                 # If provider forced a specific prompt, only return that one
                 if settings.system_prompt_id:
-                    prompt = SystemPrompt.query.get(settings.system_prompt_id)
+                    prompt = db.session.get(SystemPrompt, settings.system_prompt_id)
                     if prompt:
                         content = prompt.content
                         if provider_custom_instructions:
@@ -734,7 +734,7 @@ def _compile_disclaimer_blocks(blocks):
             lines = content.split('\n')
             list_items = [l for l in lines if l.strip().startswith('-')]
             plain = [l for l in lines if not l.strip().startswith('-')]
-            html = f'<div class="rounded-lg border-l-4 border-amber-400 bg-amber-50 p-4 my-4">'
+            html = '<div class="rounded-lg border-l-4 border-amber-400 bg-amber-50 p-4 my-4">'
             html += f'<h3 class="text-sm font-semibold text-amber-800 mb-2">{boldify(title)}</h3>'
             if plain:
                 html += f'<p class="text-sm text-amber-900 mb-2">{boldify(" ".join(plain))}</p>'
@@ -747,7 +747,7 @@ def _compile_disclaimer_blocks(blocks):
             parts.append(html)
         elif btype == 'alert':
             title = block.get('title', 'Alert')
-            html = f'<div class="rounded-lg border-l-4 border-red-500 bg-red-50 p-4 my-4">'
+            html = '<div class="rounded-lg border-l-4 border-red-500 bg-red-50 p-4 my-4">'
             html += f'<h3 class="text-sm font-semibold text-red-900 mb-2">{boldify(title)}</h3>'
             html += f'<p class="text-sm text-red-900">{boldify(content)}</p>'
             html += '</div>'

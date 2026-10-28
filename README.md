@@ -78,12 +78,14 @@ Flask + SQLAlchemy + Jinja2 templates + Tailwind CSS (CDN). SQLite for local dev
 cloze/
 ├── llm_chat/                 # Flask application
 │   ├── models/               # SQLAlchemy models
-│   │   ├── core.py           #   User, ProviderPatient, Model, SystemPrompt
+│   │   ├── core.py           #   User, ProviderPatient
+│   │   ├── chat.py           #   Model, Conversation, Message, SavedSelection
 │   │   ├── chat_window.py    #   ChatWindow, ChatTemplate
-│   │   ├── chat.py           #   Conversation, Message, Selection
-│   │   ├── report.py         #   Report
+│   │   ├── study_flow.py     #   StudyFlow, FlowPhase, FlowChat, FlowEnrollment
 │   │   ├── safety_plan.py    #   SafetyPlan
-│   │   └── settings.py       #   ProviderSettings
+│   │   ├── audit.py          #   AuditLog, EscalationEvent
+│   │   ├── report.py         #   Report
+│   │   └── settings.py       #   SystemPrompt, Provider/Admin/UserSettings, ProviderFeatureFlags
 │   ├── routes/               # API + page routes
 │   │   ├── auth.py           #   Login/logout
 │   │   ├── admin.py          #   Admin dashboard
@@ -94,14 +96,20 @@ cloze/
 │   │   └── safety_plan.py    #   Safety plan CRUD + approval workflow
 │   ├── services/
 │   │   ├── llm_interface.py  #   Multi-provider LLM client (OpenAI, Anthropic, Google, Ollama)
+│   │   ├── guard.py          #   CLOZE-Guard keyword pre-classifier
+│   │   ├── notifications.py  #   CLOZE-Guard alert emails (AWS SES)
 │   │   ├── report_utils.py   #   Report generation orchestration
 │   │   └── report_scheduler.py
 │   └── utils/
-│       └── decorators.py     #   @role_required
+│       ├── decorators.py     #   @role_required
+│       ├── access_hours.py   #   CLOZE-Guard access-hours windows
+│       ├── passwords.py      #   Password complexity policy
+│       └── settings_resolution.py  # Feature flags > admin settings > defaults
 ├── prompts/                  # Layered prompt system
 │   ├── composer.py           #   compose_system_prompt() — assembles all layers
 │   ├── registry.py           #   Domain prompt registry
-│   ├── constitutional/       #   Layer 1: identity, safety, scope
+│   ├── loader.py             #   Markdown prompt loading
+│   ├── constitutional/       #   Layer 1: universal safety, defaults, study context
 │   └── domains/              #   Layer 2: anxiety, depression, trauma, etc.
 ├── report/                   # Report generation pipeline
 │   ├── generator.py          #   UnifiedReportGenerator orchestrator
@@ -128,17 +136,19 @@ cloze/
 │       └── pdf_styles.py
 ├── templates/                # Jinja2 (all extend base.html)
 │   ├── base.html             #   Shared layout, sidebar, Tailwind config
-│   ├── login.html
+│   ├── login.html, admin_login.html
 │   ├── admin_dashboard.html
-│   ├── provider_dashboard.html
-│   ├── provider_chat_windows.html
-│   ├── user_dashboard.html
-│   ├── user_chat_windows.html
-│   ├── patient_reports.html
-│   └── conversation.html
+│   ├── provider_dashboard.html, provider_chats.html, provider_chat_windows.html
+│   ├── provider_settings.html, study_design.html
+│   ├── user_dashboard.html, user_chat_windows.html
+│   ├── conversation.html, patient_reports.html
+│   └── 403.html, 404.html, 500.html
 ├── static/
 │   ├── js/shared.js          #   Shared utilities (escapeHtml, formatDate, etc.)
-│   └── images/logo.png
+│   └── images/               #   logo.svg, logo-dark.svg, logo.png
+├── scripts/generate_report.py  # Generate a report from the command line
+├── tests/                    # pytest suite
+├── migrate_schema.py         # Idempotent schema migrations (--apply)
 └── manage.py                 # Entry point + database seeder
 ```
 

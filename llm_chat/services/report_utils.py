@@ -14,7 +14,7 @@ def generate_report_for_window(window_id: int, report_type: str = None):
     backward compatibility. Returns None if NLP reports are disabled for
     this provider.
     """
-    window = ChatWindow.query.get(window_id)
+    window = db.session.get(ChatWindow, window_id)
     if not window:
         raise ValueError(f"Chat window {window_id} not found")
 

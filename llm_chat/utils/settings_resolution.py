@@ -4,6 +4,8 @@ Settings resolution: ProviderFeatureFlags (non-NULL) > AdminSettings > hardcoded
 
 import json
 
+from flask import current_app
+
 from ..models import AdminSettings, ProviderFeatureFlags
 
 
@@ -27,6 +29,9 @@ def get_effective_setting(setting_name, provider_id=None, default=None):
         provider_id:  The provider's user ID.  If None, falls through to global.
         default:      Hardcoded fallback if neither layer has a value.
     """
+    # The instance-wide report switch (CLOZE_REPORTS_ENABLED) wins over both layers.
+    if setting_name == 'enable_nlp_report' and not current_app.config["CLOZE_REPORTS_ENABLED"]:
+        return False
     if provider_id:
         flags = ProviderFeatureFlags.query.filter_by(provider_id=provider_id).first()
         if flags:

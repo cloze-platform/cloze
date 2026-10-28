@@ -7,8 +7,7 @@ from ..utils.passwords import validate_password
 from ..extensions import db
 from ..models import (
     User, ProviderPatient, Conversation, Message,
-    AdminSettings, UserSettings, ChatWindow, ChatTemplate,
-    Report, SafetyPlan, Model, SystemPrompt,
+    AdminSettings, UserSettings, ChatWindow, Report, SafetyPlan, Model, SystemPrompt,
     AuditLog, EscalationEvent, ProviderFeatureFlags,
 )
 
@@ -57,7 +56,7 @@ def admin_dashboard():
 @role_required('admin')
 def admin_transcript(conversation_id):
     """Read-only transcript view for admin."""
-    conversation = Conversation.query.get_or_404(conversation_id)
+    db.get_or_404(Conversation, conversation_id)  # 404 for unknown IDs
     return render_template(
         "conversation.html",
         conversation_id=conversation_id,
@@ -139,7 +138,7 @@ def create_user():
     if role == 'user' and not provider_id:
         return jsonify({'error': 'Patients must be assigned to a provider'}), 400
     if provider_id:
-        provider = User.query.get(provider_id)
+        provider = db.session.get(User, provider_id)
         if not provider or provider.role != 'provider':
             return jsonify({'error': 'Invalid provider'}), 400
 
@@ -174,7 +173,7 @@ def create_user():
 @admin_bp.route("/api/admin/user/<int:user_id>/toggle-visibility", methods=['POST'])
 @role_required('admin')
 def toggle_user_visibility(user_id):
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
     data = request.json or {}
     new_visible = data.get('visible', not user.visible)
     old_visible = user.visible
@@ -189,7 +188,7 @@ def toggle_user_visibility(user_id):
 @admin_bp.route("/api/admin/user/<int:user_id>/reset-password", methods=['POST'])
 @role_required('admin')
 def reset_user_password(user_id):
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
     data = request.json or {}
     new_password = data.get('password')
     err = _validate_password(new_password)
@@ -212,7 +211,7 @@ def get_all_patients():
     for p in patients:
         # Provider assignment
         assignment = ProviderPatient.query.filter_by(patient_id=p.id).first()
-        provider = User.query.get(assignment.provider_id) if assignment else None
+        provider = db.session.get(User, assignment.provider_id) if assignment else None
 
         # Safety plan
         active_plan = SafetyPlan.get_active_plan(p.id)
@@ -248,11 +247,11 @@ def get_all_patients():
 @role_required('admin')
 def get_patient_details(patient_id):
     """Drill-down data for a single patient."""
-    patient = User.query.get_or_404(patient_id)
+    patient = db.get_or_404(User, patient_id)
 
     # Assignment
     assignment = ProviderPatient.query.filter_by(patient_id=patient_id).first()
-    provider = User.query.get(assignment.provider_id) if assignment else None
+    provider = db.session.get(User, assignment.provider_id) if assignment else None
 
     # Safety plans
     active_plan = SafetyPlan.get_active_plan(patient_id)
@@ -290,7 +289,7 @@ def get_patient_details(patient_id):
         })
 
     # Created by info
-    created_by_user = User.query.get(patient.created_by) if patient.created_by else None
+    created_by_user = db.session.get(User, patient.created_by) if patient.created_by else None
 
     return jsonify({
         'id': patient.id,
@@ -356,12 +355,12 @@ def get_all_providers():
 @role_required('admin')
 def get_provider_details(provider_id):
     """Drill-down data for a single provider."""
-    provider = User.query.get_or_404(provider_id)
+    provider = db.get_or_404(User, provider_id)
 
     assignments = ProviderPatient.query.filter_by(provider_id=provider_id).all()
     patients = []
     for a in assignments:
-        patient = User.query.get(a.patient_id)
+        patient = db.session.get(User, a.patient_id)
         if patient:
             last_conv = Conversation.query.filter_by(user_id=patient.id).order_by(Conversation.updated_at.desc()).first()
             plan = SafetyPlan.get_active_plan(patient.id)
@@ -376,7 +375,7 @@ def get_provider_details(provider_id):
     windows = ChatWindow.query.filter_by(provider_id=provider_id).order_by(ChatWindow.created_at.desc()).all()
     window_data = []
     for w in windows:
-        patient = User.query.get(w.patient_id)
+        patient = db.session.get(User, w.patient_id)
         reports = Report.query.filter_by(window_id=w.id).all()
         window_data.append({
             'id': w.id,
@@ -430,9 +429,9 @@ def admin_get_provider_patients(provider_id):
 def get_provider_assignments():
     assignment_data = []
     for assignment in ProviderPatient.query.all():
-        provider = User.query.get(assignment.provider_id)
-        patient = User.query.get(assignment.patient_id)
-        assigned_by = User.query.get(assignment.assigned_by)
+        provider = db.session.get(User, assignment.provider_id)
+        patient = db.session.get(User, assignment.patient_id)
+        assigned_by = db.session.get(User, assignment.assigned_by)
         assignment_data.append({
             'id': assignment.id,
             'provider_id': assignment.provider_id,
@@ -448,7 +447,7 @@ def get_provider_assignments():
 @admin_bp.route("/api/admin/assignment/<int:assignment_id>", methods=['DELETE'])
 @role_required('admin')
 def remove_assignment(assignment_id):
-    assignment = ProviderPatient.query.get_or_404(assignment_id)
+    assignment = db.get_or_404(ProviderPatient, assignment_id)
     _log_action('assignment_removed', 'assignment', assignment_id, {
         'provider_id': assignment.provider_id, 'patient_id': assignment.patient_id,
     })
@@ -481,7 +480,7 @@ def get_user_conversations(user_id):
 @role_required('admin')
 def get_conversation_messages(conversation_id):
     """Get all messages for a conversation (admin transcript viewer API)."""
-    conversation = Conversation.query.get_or_404(conversation_id)
+    conversation = db.get_or_404(Conversation, conversation_id)
     messages = Message.query.filter_by(conversation_id=conversation_id).order_by(Message.timestamp).all()
     return jsonify({
         'conversation': {
@@ -629,7 +628,7 @@ def create_model():
 @admin_bp.route("/api/admin/models/<int:model_id>", methods=['PUT'])
 @role_required('admin')
 def update_model(model_id):
-    model = Model.query.get_or_404(model_id)
+    model = db.get_or_404(Model, model_id)
     data = request.json or {}
 
     if 'name' in data:
@@ -653,7 +652,7 @@ def update_model(model_id):
 @admin_bp.route("/api/admin/models/<int:model_id>/toggle", methods=['POST'])
 @role_required('admin')
 def toggle_model(model_id):
-    model = Model.query.get_or_404(model_id)
+    model = db.get_or_404(Model, model_id)
     model.visible = not model.visible
     _log_action('model_toggled', 'model', model_id, {
         'name': model.name, 'visible': model.visible,
@@ -671,10 +670,10 @@ def get_pending_plans():
     pending = SafetyPlan.query.filter_by(status='pending_review').all()
     result = []
     for plan in pending:
-        patient = User.query.get(plan.patient_id)
+        patient = db.session.get(User, plan.patient_id)
         # Find assigned provider
         assignment = ProviderPatient.query.filter_by(patient_id=plan.patient_id).first()
-        provider = User.query.get(assignment.provider_id) if assignment else None
+        provider = db.session.get(User, assignment.provider_id) if assignment else None
         result.append({
             'plan_id': plan.id,
             'patient_id': plan.patient_id,
@@ -697,9 +696,9 @@ def get_patients_missing_plans():
     for pid in patient_ids:
         active = SafetyPlan.get_active_plan(pid)
         if not active:
-            patient = User.query.get(pid)
+            patient = db.session.get(User, pid)
             assignment = ProviderPatient.query.filter_by(patient_id=pid).first()
-            provider = User.query.get(assignment.provider_id) if assignment else None
+            provider = db.session.get(User, assignment.provider_id) if assignment else None
             window_count = ChatWindow.query.filter_by(patient_id=pid, visible=True).count()
             result.append({
                 'patient_id': pid,
@@ -720,7 +719,7 @@ def get_plan_conflicts():
         prompt_dict = plan.to_prompt_dict()
         conflicts = prompt_dict.get('conflicts', [])
         if conflicts:
-            patient = User.query.get(plan.patient_id)
+            patient = db.session.get(User, plan.patient_id)
             result.append({
                 'plan_id': plan.id,
                 'patient_id': plan.patient_id,
@@ -765,7 +764,7 @@ def get_escalation_events():
 @admin_bp.route("/api/admin/escalation-events/<int:event_id>/acknowledge", methods=['POST'])
 @role_required('admin')
 def acknowledge_escalation(event_id):
-    event = EscalationEvent.query.get_or_404(event_id)
+    event = db.get_or_404(EscalationEvent, event_id)
     data = request.json or {}
     new_status = data.get('status', 'acknowledged')
     event.status = new_status
@@ -819,7 +818,7 @@ _TEXT_FLAGS = {'safety_disclaimer_text', 'system_context_override', 'monitoring_
 @role_required('admin')
 def get_provider_feature_flags(provider_id):
     """Get feature flags for a provider. Returns explicit values + inherited globals."""
-    provider = User.query.get_or_404(provider_id)
+    provider = db.get_or_404(User, provider_id)
     if provider.role != 'provider':
         return jsonify({'error': 'User is not a provider'}), 400
 
@@ -864,7 +863,7 @@ def _resolve_effective(col, explicit):
 @role_required('admin')
 def update_provider_feature_flags(provider_id):
     """Create or update feature flags for a provider."""
-    provider = User.query.get_or_404(provider_id)
+    provider = db.get_or_404(User, provider_id)
     if provider.role != 'provider':
         return jsonify({'error': 'User is not a provider'}), 400
 
@@ -960,7 +959,7 @@ def create_prompt():
 @role_required('admin')
 def update_prompt(prompt_id):
     """Admin edits a system prompt."""
-    prompt = SystemPrompt.query.get_or_404(prompt_id)
+    prompt = db.get_or_404(SystemPrompt, prompt_id)
     data = request.json or {}
     if 'name' in data:
         prompt.name = data['name'].strip()
@@ -979,7 +978,7 @@ def update_prompt(prompt_id):
 @role_required('admin')
 def delete_prompt(prompt_id):
     """Admin soft-deletes a system prompt."""
-    prompt = SystemPrompt.query.get_or_404(prompt_id)
+    prompt = db.get_or_404(SystemPrompt, prompt_id)
     prompt.visible = False
     _log_action('prompt_deleted', 'system_prompt', prompt_id, {'name': prompt.name})
     db.session.commit()
