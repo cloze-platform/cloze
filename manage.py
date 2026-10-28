@@ -1,6 +1,9 @@
+import argparse
+import getpass
 import json
 import os
 import secrets
+import sys
 import time
 from flask import Flask
 from llm_chat import create_app
@@ -10,6 +13,7 @@ from llm_chat.models import (
     Model, Conversation, Message, ChatWindow, ChatTemplate, SafetyPlan
 )
 from llm_chat.services.llm_interface import LLMInterface
+from llm_chat.utils.passwords import validate_password
 
 app: Flask = create_app()
 
@@ -35,8 +39,9 @@ def _save_credentials(credentials):
     print(f"\nCredentials saved to {CREDENTIALS_FILE}")
 
 
-def initialize_database():
-    """Initialize database with default data (idempotent)."""
+def initialize_database(demo=True):
+    """Create tables, models and system prompts (idempotent). With demo=True,
+    also demo accounts, chats and safety plans for local development."""
     with app.app_context():
         # Create tables if they don't exist
         db.create_all()
@@ -44,6 +49,65 @@ def initialize_database():
 
         # Initialize LLM clients
         LLMInterface.initialize_clients(app.config)
+
+        # Default models (only if none exist)
+        if not Model.query.first():
+            models = [
+                Model(name='GPT-3.5 Turbo', provider='openai', model_identifier='gpt-3.5-turbo',
+                      config=json.dumps({'temperature': 0.7, 'max_tokens': 1000})),
+                Model(name='GPT-4o', provider='openai', model_identifier='gpt-4o',
+                      config=json.dumps({'temperature': 0.7, 'max_tokens': 1000})),
+                Model(name='GPT-4o Mini', provider='openai', model_identifier='gpt-4o-mini',
+                      config=json.dumps({'temperature': 0.7, 'max_tokens': 1000})),
+                Model(name='Claude Opus 4.5', provider='anthropic', model_identifier='claude-opus-4-5-20251101',
+                      config=json.dumps({'temperature': 0.7, 'max_tokens': 1000})),
+                Model(name='Claude Sonnet 4.5', provider='anthropic', model_identifier='claude-sonnet-4-5-20250514',
+                      config=json.dumps({'temperature': 0.7, 'max_tokens': 1000})),
+                Model(name='Gemini 2.0 Flash', provider='google', model_identifier='gemini-2.0-flash',
+                      config=json.dumps({'temperature': 0.7, 'max_tokens': 1000})),
+                Model(name='Llama 3.2 1B (Fast)', provider='local',
+                      api_endpoint=f"{app.config['OLLAMA_HOST']}/v1/chat/completions",
+                      model_identifier='llama3.2:1b',
+                      config=json.dumps({'temperature': 0.7, 'max_tokens': 2000})),
+                Model(name='Llama 3.2 3B (Balanced)', provider='local',
+                      api_endpoint=f"{app.config['OLLAMA_HOST']}/v1/chat/completions",
+                      model_identifier='llama3.2:3b',
+                      config=json.dumps({'temperature': 0.7, 'max_tokens': 2000})),
+                Model(name='Llama 3.1 8B (Quality)', provider='local',
+                      api_endpoint=f"{app.config['OLLAMA_HOST']}/v1/chat/completions",
+                      model_identifier='llama3.1:8b',
+                      config=json.dumps({'temperature': 0.7, 'max_tokens': 2000})),
+            ]
+            for m in models:
+                db.session.add(m)
+            print("Created default models")
+
+        # Default system prompts — seed from prompt registry
+        from prompts.registry import PromptRegistry
+        registry = PromptRegistry.instance()
+        if not SystemPrompt.query.first():
+            for domain in registry.list_domain_prompts():
+                db.session.add(SystemPrompt(
+                    name=domain.name,
+                    content=domain.description,
+                    domain_prompt_id=domain.id,
+                ))
+            print("Created domain-linked system prompts")
+        else:
+            # Back-fill domain_prompt_id on existing rows that lack it
+            for domain in registry.list_domain_prompts():
+                if not SystemPrompt.query.filter_by(domain_prompt_id=domain.id).first():
+                    db.session.add(SystemPrompt(
+                        name=domain.name,
+                        content=domain.description,
+                        domain_prompt_id=domain.id,
+                    ))
+                    print(f"Added domain prompt: {domain.name}")
+
+        if not demo:
+            db.session.commit()
+            print("Database initialization complete (no demo data).")
+            return
 
         # Track credentials for newly created users
         new_credentials = []
@@ -100,60 +164,6 @@ def initialize_database():
                         assigned_by=admin.id
                     ))
                     print(f"Created provider assignment for {username}")
-
-        # Default models (only if none exist)
-        if not Model.query.first():
-            models = [
-                Model(name='GPT-3.5 Turbo', provider='openai', model_identifier='gpt-3.5-turbo',
-                      config=json.dumps({'temperature': 0.7, 'max_tokens': 1000})),
-                Model(name='GPT-4o', provider='openai', model_identifier='gpt-4o',
-                      config=json.dumps({'temperature': 0.7, 'max_tokens': 1000})),
-                Model(name='GPT-4o Mini', provider='openai', model_identifier='gpt-4o-mini',
-                      config=json.dumps({'temperature': 0.7, 'max_tokens': 1000})),
-                Model(name='Claude Opus 4.5', provider='anthropic', model_identifier='claude-opus-4-5-20251101',
-                      config=json.dumps({'temperature': 0.7, 'max_tokens': 1000})),
-                Model(name='Claude Sonnet 4.5', provider='anthropic', model_identifier='claude-sonnet-4-5-20250514',
-                      config=json.dumps({'temperature': 0.7, 'max_tokens': 1000})),
-                Model(name='Gemini 2.0 Flash', provider='google', model_identifier='gemini-2.0-flash',
-                      config=json.dumps({'temperature': 0.7, 'max_tokens': 1000})),
-                Model(name='Llama 3.2 1B (Fast)', provider='local',
-                      api_endpoint=f"{app.config['OLLAMA_HOST']}/v1/chat/completions",
-                      model_identifier='llama3.2:1b',
-                      config=json.dumps({'temperature': 0.7, 'max_tokens': 2000})),
-                Model(name='Llama 3.2 3B (Balanced)', provider='local',
-                      api_endpoint=f"{app.config['OLLAMA_HOST']}/v1/chat/completions",
-                      model_identifier='llama3.2:3b',
-                      config=json.dumps({'temperature': 0.7, 'max_tokens': 2000})),
-                Model(name='Llama 3.1 8B (Quality)', provider='local',
-                      api_endpoint=f"{app.config['OLLAMA_HOST']}/v1/chat/completions",
-                      model_identifier='llama3.1:8b',
-                      config=json.dumps({'temperature': 0.7, 'max_tokens': 2000})),
-            ]
-            for m in models:
-                db.session.add(m)
-            print("Created default models")
-
-        # Default system prompts — seed from prompt registry
-        from prompts.registry import PromptRegistry
-        registry = PromptRegistry.instance()
-        if not SystemPrompt.query.first():
-            for domain in registry.list_domain_prompts():
-                db.session.add(SystemPrompt(
-                    name=domain.name,
-                    content=domain.description,
-                    domain_prompt_id=domain.id,
-                ))
-            print("Created domain-linked system prompts")
-        else:
-            # Back-fill domain_prompt_id on existing rows that lack it
-            for domain in registry.list_domain_prompts():
-                if not SystemPrompt.query.filter_by(domain_prompt_id=domain.id).first():
-                    db.session.add(SystemPrompt(
-                        name=domain.name,
-                        content=domain.description,
-                        domain_prompt_id=domain.id,
-                    ))
-                    print(f"Added domain prompt: {domain.name}")
 
         # Flush to ensure IDs are assigned for models, prompts, users
         db.session.flush()
@@ -418,6 +428,42 @@ def initialize_database():
             db.session.rollback()
             print(f"Database initialization completed with some existing data: {e}")
 
+def create_admin(username, email):
+    """Create an admin account, prompting for the password so it stays out of
+    shell history and logs."""
+    with app.app_context():
+        if User.query.filter((User.username == username) | (User.email == email)).first():
+            sys.exit(f"A user with username {username!r} or email {email!r} already exists.")
+        password = getpass.getpass("Password: ")
+        error = validate_password(password)
+        if error:
+            sys.exit(error)
+        if getpass.getpass("Repeat password: ") != password:
+            sys.exit("Passwords don't match.")
+        admin = User(username=username, email=email, role='admin')
+        admin.set_password(password)
+        db.session.add(admin)
+        db.session.commit()
+        print(f"Created admin {username!r}.")
+
+
 if __name__ == "__main__":
-    initialize_database()
-    app.run(debug=True, host="0.0.0.0", port=5051)
+    parser = argparse.ArgumentParser(
+        description="Cloze setup. With no command: seed demo data and run the dev server.")
+    commands = parser.add_subparsers(dest="command")
+    commands.add_parser(
+        "init-production",
+        help="Create tables, models and system prompts, with no demo accounts or data.")
+    create_admin_cmd = commands.add_parser(
+        "create-admin", help="Create an admin account (prompts for the password).")
+    create_admin_cmd.add_argument("username")
+    create_admin_cmd.add_argument("email")
+    args = parser.parse_args()
+
+    if args.command == "init-production":
+        initialize_database(demo=False)
+    elif args.command == "create-admin":
+        create_admin(args.username, args.email)
+    else:
+        initialize_database()
+        app.run(debug=True, host="0.0.0.0", port=5051)

@@ -22,3 +22,9 @@ def test_login_route_exists(app):
 def test_login_page_responds(client):
     resp = client.get("/login")
     assert resp.status_code == 200
+
+
+def test_health_check_needs_no_login(client):
+    resp = client.get("/healthz")
+    assert resp.status_code == 200
+    assert resp.get_data(as_text=True) == "ok"

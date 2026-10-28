@@ -1,0 +1,33 @@
+# Keep local databases, credentials and environments out of the image.
+
+# Secrets and local data
+.env
+.env.*
+instance/
+*.db
+*.sqlite
+*.sqlite3
+seed_credentials.txt
+
+# Version control, docs and tooling
+.git
+.github
+.docs
+.claude
+docs/
+infra/
+tests/
+Dockerfile*
+docker-compose.yml
+
+# Environments and caches
+.venv*
+venv/
+**/__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov/
+.DS_Store
+static/images/logo-concepts/

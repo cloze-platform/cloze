@@ -59,8 +59,7 @@ static/images/logo-concepts/
 # GitHub Actions workflows (ignore for now)
 .github/
 
-# Docker files (ignore for now)
-Dockerfile
+# Local-only Docker setup (the production Dockerfile is tracked)
 Dockerfile.ollama
 docker-compose.yml
 .DS_Store
