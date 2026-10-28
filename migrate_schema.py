@@ -148,13 +148,13 @@ def run_migration(apply=False):
         if table_exists(cursor, t, db_type):
             print(f"  OK    table '{t}' — already exists")
         else:
-            print(f"  NEW   table '{t}' — will be created by db.create_all() on app startup")
+            print(f"  NEW   table '{t}' — will be created by --apply")
 
     # ── Apply or report ──────────────────────────────────────
     print()
     if not changes:
         print("No ALTER TABLE changes needed. All existing tables are up to date.")
-        print("New tables (if any) will be created automatically when the app starts.")
+        print("New tables (if any) are created by --apply.")
     elif not apply:
         print(f"{len(changes)} change(s) needed. Run with --apply to execute:")
         for sql in changes:
@@ -181,8 +181,7 @@ def run_migration(apply=False):
                 db.create_all()
             print("Done. All tables up to date.")
         except Exception as e:
-            print(f"Warning: db.create_all() failed: {e}")
-            print("New tables may need to be created manually.")
+            sys.exit(f"db.create_all() failed: {e}")
 
 
 if __name__ == '__main__':

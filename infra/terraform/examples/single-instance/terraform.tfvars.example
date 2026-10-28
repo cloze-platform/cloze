@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+instance       = "example"
+aws_account_id = "123456789012"
+aws_profile    = "example-cloze"
+region         = "us-east-1"
+domain_name    = "cloze.example.org"
+llm_providers  = ["openai"]
+
+# Rollout switches - see infra/terraform/README.md
+enable_https       = false
+image_tag          = "bootstrap"
+reports_enabled    = true
+guard_sender_email = ""

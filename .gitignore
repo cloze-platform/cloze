@@ -59,9 +59,19 @@ static/images/logo-concepts/
 # GitHub Actions workflows (ignore for now)
 .github/
 
-# Docker files (ignore for now)
-Dockerfile
+# Local-only Docker setup (the production Dockerfile is tracked)
 Dockerfile.ollama
 docker-compose.yml
 .DS_Store
 .DS_Store
+
+# Terraform: per-instance values, local state and plans stay out of git
+# (.terraform.lock.hcl IS committed)
+infra/terraform/**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfplan.json
+infra/terraform/**/tfplan*
+infra/terraform/**/*.tfvars
+infra/terraform/**/backend.hcl

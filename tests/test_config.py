@@ -185,3 +185,10 @@ def test_guard_email_skipped_without_sender(app, monkeypatch):
     send_guard_email("a@example.test")
 
     assert sent == [] and calls == {}
+
+
+def test_postgres_urls_use_psycopg2():
+    # The image ships psycopg2. SQLAlchemy 2.1 would pick psycopg 3 for these URLs.
+    from sqlalchemy.engine import make_url
+
+    assert make_url("postgresql://user:pw@db.example/cloze").get_dialect().driver == "psycopg2"

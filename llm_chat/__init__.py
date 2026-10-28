@@ -104,6 +104,11 @@ def create_app():
     def server_error(e):
         return _rt('500.html'), 500
 
+    # Load balancer health check. Skips the database, so a DB blip doesn't restart every task.
+    @app.get("/healthz")
+    def healthz():
+        return "ok"
+
     # Start report scheduler (5-minute interval)
     from .services.report_scheduler import report_scheduler
     report_scheduler.init_app(app)

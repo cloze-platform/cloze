@@ -1,0 +1,8 @@
+# Copy to backend.hcl (gitignored) and fill in. The bucket is created once per
+# account by scripts/bootstrap-state-bucket.sh.
+bucket       = "cloze-tfstate-123456789012"
+key          = "cloze/terraform.tfstate"
+region       = "us-east-1"
+profile      = "example-cloze"
+encrypt      = true
+use_lockfile = true
