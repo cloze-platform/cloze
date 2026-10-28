@@ -3,6 +3,8 @@
 #
 #   aws codebuild start-build --project-name <name>-image \
 #     --environment-variables-override name=GIT_REF,value=<ref>
+#
+# StartBuild can replace this buildspec, so only admins should have it.
 
 resource "aws_cloudwatch_log_group" "build" {
   name              = "/${var.name}/build"
@@ -33,15 +35,17 @@ resource "aws_codebuild_project" "image" {
               cd src
               git checkout --quiet --detach "$GIT_REF" 2> /dev/null || git checkout --quiet --detach "origin/$GIT_REF"
               COMMIT="$(git rev-parse HEAD)"
+              # GitHub also serves pull request and fork commits by SHA; only
+              # build ones that are on a branch or tag of this repository.
+              if [ -z "$(git for-each-ref --contains HEAD refs/remotes/origin refs/tags)" ]; then
+                echo "$COMMIT isn't on any branch or tag of $SOURCE_REPOSITORY; not building it." >&2
+                exit 1
+              fi
               IMAGE="$IMAGE_REPOSITORY:$COMMIT"
               echo "Building $GIT_REF at $COMMIT"
-              # Tags are immutable; skip commits already built.
-              if aws ecr describe-images --repository-name "$ECR_REPOSITORY_NAME" --image-ids imageTag="$COMMIT" > /dev/null 2>&1; then
-                echo "$IMAGE already exists; nothing to build."
-                exit 0
-              fi
               aws ecr get-login-password | docker login --username AWS --password-stdin "$${IMAGE_REPOSITORY%%/*}"
               docker build --tag "$IMAGE" .
+              # Tags are immutable, so this fails if the commit was already pushed.
               docker push "$IMAGE"
               echo "Pushed $IMAGE"
     EOT
@@ -64,10 +68,6 @@ resource "aws_codebuild_project" "image" {
     environment_variable {
       name  = "IMAGE_REPOSITORY"
       value = aws_ecr_repository.app.repository_url
-    }
-    environment_variable {
-      name  = "ECR_REPOSITORY_NAME"
-      value = aws_ecr_repository.app.name
     }
   }
 
@@ -119,7 +119,6 @@ data "aws_iam_policy_document" "build" {
       "ecr:BatchCheckLayerAvailability",
       "ecr:BatchGetImage",
       "ecr:CompleteLayerUpload",
-      "ecr:DescribeImages",
       "ecr:InitiateLayerUpload",
       "ecr:PutImage",
       "ecr:UploadLayerPart",

@@ -6,7 +6,7 @@ flask-smorest==0.42.0
 requests==2.31.0
 python-dotenv==1.0.0
 PyYAML>=6.0
-gunicorn==21.2.0
+gunicorn==23.0.0
 
 # PostgreSQL driver (for AWS RDS)
 psycopg2-binary==2.9.9

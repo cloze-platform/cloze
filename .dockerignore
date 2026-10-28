@@ -1,13 +1,17 @@
 # Keep local databases, credentials and environments out of the image.
 
-# Secrets and local data
+# Secrets, local data and participant exports
 .env
 .env.*
+.aws/
 instance/
 *.db
 *.sqlite
 *.sqlite3
 seed_credentials.txt
+*.pdf
+report*.html
+*.log
 
 # Version control, docs and tooling
 .git

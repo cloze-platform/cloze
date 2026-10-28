@@ -39,7 +39,7 @@ This folder builds one complete Cloze instance inside a dedicated AWS account: n
 | Secrets | SSM Parameter Store, under `/cloze-<instance>/` | Injected as environment variables at task start. API keys are set by hand, so they never enter Terraform state or git. |
 | Image builds | CodeBuild in the instance's account, from a commit on GitHub | No Docker needed locally, and an image can only contain committed code: nothing from anyone's working tree. |
 | Deploys | Immutable image tags (git SHA); automatic rollback | The running code is always identifiable, and a broken deploy reverts itself. |
-| Admin access | One-off tasks and ECS Exec (`aws ecs execute-command`) | No SSH and no bastion host, and every session is logged in CloudTrail. |
+| Admin access | One-off tasks and ECS Exec (`aws ecs execute-command`) | No SSH and no bastion host. CloudTrail records each session starting, and ECS Exec sessions themselves are recorded in the `/<name>/exec` log group. |
 | Safety rail | `allowed_account_ids` in the provider | Terraform refuses to touch any account other than the instance's own. |
 
 **Rough cost** (us-east-1, idle-to-light use): about **$115–125/month**.
@@ -91,12 +91,15 @@ This creates the network, database, secrets, image registry and build project, t
 
 **5. Add the certificate validation record** at your DNS host: the CNAME under `cloze.certificate_validation_records` in `terraform output`. If it's Cloudflare, set it to **DNS only** (grey cloud).
 
-**6. Set the API keys** for the providers in `llm_providers`. Terraform created them as placeholders, listed in `cloze.secrets_to_set_by_hand`. Typing the key at `read -s` keeps it out of your shell history:
+**6. Set the API keys** for the providers in `llm_providers`. Terraform created them as placeholders, listed in `cloze.secrets_to_set_by_hand`. Paste the key at the prompt; it's piped in, so it stays out of your shell history and the process list:
 
 ```bash
-read -rs KEY && aws ssm put-parameter --profile <profile> --overwrite --type SecureString \
-  --name /<name>/OPENAI_API_KEY --value "$KEY"; unset KEY
+printf 'API key: '; read -rs KEY; echo
+printf %s "$KEY" | aws ssm put-parameter --profile <profile> --overwrite --type SecureString \
+  --name /<name>/OPENAI_API_KEY --value file:///dev/stdin; unset KEY
 ```
+
+Or edit the parameter in the console (Systems Manager → Parameter Store), keeping the type and the `alias/<name>-data` key.
 
 **7. Build the image** from a commit on GitHub (`GIT_REF` can be a branch, tag or commit SHA):
 

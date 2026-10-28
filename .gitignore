@@ -71,6 +71,7 @@ infra/terraform/**/.terraform/
 *.tfstate
 *.tfstate.*
 *.tfplan
-infra/terraform/**/tfplan
-infra/terraform/**/terraform.tfvars
+*.tfplan.json
+infra/terraform/**/tfplan*
+infra/terraform/**/*.tfvars
 infra/terraform/**/backend.hcl

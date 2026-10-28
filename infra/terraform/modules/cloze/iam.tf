@@ -64,7 +64,8 @@ data "aws_iam_policy_document" "task" {
     ]
   }
 
-  # ECS Exec (`aws ecs execute-command`), for admin shells in a task.
+  # ECS Exec (`aws ecs execute-command`), for admin shells in a task, with
+  # sessions written to the exec log group.
   statement {
     sid = "EcsExec"
     actions = [
@@ -74,6 +75,26 @@ data "aws_iam_policy_document" "task" {
       "ssmmessages:OpenDataChannel",
     ]
     resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "task_exec_logs" {
+  name   = "ecs-exec-logs"
+  role   = aws_iam_role.task.id
+  policy = data.aws_iam_policy_document.task_exec_logs.json
+}
+
+data "aws_iam_policy_document" "task_exec_logs" {
+  statement {
+    sid       = "FindExecLogGroup"
+    actions   = ["logs:DescribeLogGroups"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid       = "WriteExecSessions"
+    actions   = ["logs:CreateLogStream", "logs:DescribeLogStreams", "logs:PutLogEvents"]
+    resources = ["${aws_cloudwatch_log_group.exec.arn}:*"]
   }
 }
 

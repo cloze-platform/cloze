@@ -6,6 +6,23 @@
 
 resource "aws_ecs_cluster" "main" {
   name = var.name
+
+  # Record what happens in ECS Exec sessions; CloudTrail only shows that one started.
+  configuration {
+    execute_command_configuration {
+      logging = "OVERRIDE"
+      log_configuration {
+        cloud_watch_log_group_name     = aws_cloudwatch_log_group.exec.name
+        cloud_watch_encryption_enabled = true
+      }
+    }
+  }
+}
+
+resource "aws_cloudwatch_log_group" "exec" {
+  name              = "/${var.name}/exec"
+  retention_in_days = var.log_retention_days
+  kms_key_id        = aws_kms_key.data.arn
 }
 
 resource "aws_cloudwatch_log_group" "web" {
