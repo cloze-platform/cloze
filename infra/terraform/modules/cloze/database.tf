@@ -22,9 +22,11 @@ resource "aws_db_parameter_group" "main" {
   name_prefix = "${var.name}-pg${var.db_engine_version}-"
   family      = "postgres${var.db_engine_version}"
 
+  # Already the default since PostgreSQL 15; set so it can't be switched off.
   parameter {
-    name  = "rds.force_ssl"
-    value = "1"
+    name         = "rds.force_ssl"
+    value        = "1"
+    apply_method = "pending-reboot" # how RDS reports it; anything else diffs on every plan
   }
 
   lifecycle {
