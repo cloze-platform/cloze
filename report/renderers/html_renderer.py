@@ -361,7 +361,7 @@ class HTMLRenderer(Renderer):
 
     def _render_cooccurrence_analysis(self, data: Dict[str, Any]) -> str:
         """Render co-occurrence analysis component (summary mode)."""
-        html = f"""
+        html = """
         <div class="report-component cooccurrence-analysis">
             <div class="component-header">
                 <h3 class="component-title">Word Co-occurrence</h3>

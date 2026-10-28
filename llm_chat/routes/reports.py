@@ -1,9 +1,8 @@
 import json
 import tempfile
-import os
-from flask import Blueprint, jsonify, render_template, abort, request, send_file, Response
+from flask import Blueprint, jsonify, abort, request, send_file
 from flask_login import login_required, current_user
-from ..models import Report, ChatWindow, User
+from ..models import Report, ChatWindow
 from ..services.report_utils import generate_report_for_window, finalize_expired_windows
 from ..utils.settings_resolution import get_effective_setting
 from report.generator import UnifiedReportGenerator

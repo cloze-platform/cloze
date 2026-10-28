@@ -1,4 +1,3 @@
-import json
 import time
 from flask import Blueprint, jsonify, request, abort
 from flask_login import login_required, current_user

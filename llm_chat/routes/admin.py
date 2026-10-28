@@ -7,8 +7,7 @@ from ..utils.passwords import validate_password
 from ..extensions import db
 from ..models import (
     User, ProviderPatient, Conversation, Message,
-    AdminSettings, UserSettings, ChatWindow, ChatTemplate,
-    Report, SafetyPlan, Model, SystemPrompt,
+    AdminSettings, UserSettings, ChatWindow, Report, SafetyPlan, Model, SystemPrompt,
     AuditLog, EscalationEvent, ProviderFeatureFlags,
 )
 
@@ -57,7 +56,7 @@ def admin_dashboard():
 @role_required('admin')
 def admin_transcript(conversation_id):
     """Read-only transcript view for admin."""
-    conversation = Conversation.query.get_or_404(conversation_id)
+    Conversation.query.get_or_404(conversation_id)  # 404 for unknown IDs
     return render_template(
         "conversation.html",
         conversation_id=conversation_id,

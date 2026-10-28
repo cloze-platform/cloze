@@ -289,12 +289,12 @@ class LLMInterface:
         filepath = error_dir / f"{timestamp}_gemini_safety_block.txt"
 
         lines = [
-            f"Gemini Safety Block Debug Dump",
+            "Gemini Safety Block Debug Dump",
             f"{'=' * 60}",
             f"Timestamp:  {time.strftime('%Y-%m-%d %H:%M:%S')}",
             f"Model:      {model.model_identifier}",
             f"Config:     {json.dumps(config, indent=2)}",
-            f"",
+            "",
         ]
 
         # Response details
@@ -306,27 +306,27 @@ class LLMInterface:
                     lines.append(f"    finish_reason: {candidate.finish_reason}")
                     safety_ratings = getattr(candidate, 'safety_ratings', None)
                     if safety_ratings:
-                        lines.append(f"    safety_ratings:")
+                        lines.append("    safety_ratings:")
                         for rating in safety_ratings:
                             cat = getattr(rating, 'category', 'unknown')
                             prob = getattr(rating, 'probability', None) or getattr(rating, 'blocked', 'unknown')
                             lines.append(f"      {cat}: {prob}")
             prompt_feedback = getattr(response, 'prompt_feedback', None)
             if prompt_feedback:
-                lines.append(f"")
+                lines.append("")
                 lines.append(f"Prompt Feedback: {prompt_feedback}")
         except Exception as e:
             lines.append(f"Error reading response: {e}")
 
         # Full messages
-        lines.append(f"")
+        lines.append("")
         lines.append(f"{'=' * 60}")
         lines.append(f"MESSAGES ({len(messages)} total)")
         lines.append(f"{'=' * 60}")
         for i, msg in enumerate(messages):
             role = msg.get('role', 'unknown')
             content = msg.get('content', '')
-            lines.append(f"")
+            lines.append("")
             lines.append(f"--- Message {i + 1} [{role}] ({len(content)} chars) ---")
             lines.append(content)
 
@@ -350,20 +350,20 @@ class LLMInterface:
         filepath = error_dir / filename
 
         lines = [
-            f"LLM Error Debug Dump",
+            "LLM Error Debug Dump",
             f"{'=' * 60}",
             f"Timestamp:  {time.strftime('%Y-%m-%d %H:%M:%S')}",
             f"Provider:   {model.provider}",
             f"Model:      {model.model_identifier}",
             f"Model Name: {model.name}",
             f"Config:     {json.dumps(config, indent=2)}",
-            f"",
+            "",
             f"Error Type: {type(error).__name__}",
             f"Error:      {str(error)}",
-            f"",
-            f"Traceback:",
+            "",
+            "Traceback:",
             traceback.format_exc(),
-            f"",
+            "",
             f"{'=' * 60}",
             f"MESSAGES ({len(messages)} total)",
             f"{'=' * 60}",
@@ -372,16 +372,16 @@ class LLMInterface:
         for i, msg in enumerate(messages):
             role = msg.get('role', 'unknown')
             content = msg.get('content', '')
-            lines.append(f"")
+            lines.append("")
             lines.append(f"--- Message {i + 1} [{role}] ({len(content)} chars) ---")
             lines.append(content)
 
         # If it's a Gemini safety block, try to extract safety ratings
         try:
             if hasattr(error, '__cause__') and error.__cause__:
-                lines.append(f"")
+                lines.append("")
                 lines.append(f"{'=' * 60}")
-                lines.append(f"UNDERLYING CAUSE")
+                lines.append("UNDERLYING CAUSE")
                 lines.append(str(error.__cause__))
         except Exception:
             pass
@@ -394,16 +394,16 @@ class LLMInterface:
             caller_locals = frame.f_back.f_back.f_locals if frame else {}
             raw_response = caller_locals.get('response')
             if raw_response and hasattr(raw_response, 'candidates'):
-                lines.append(f"")
+                lines.append("")
                 lines.append(f"{'=' * 60}")
-                lines.append(f"RAW RESPONSE")
+                lines.append("RAW RESPONSE")
                 lines.append(f"Candidates: {len(raw_response.candidates) if raw_response.candidates else 0}")
                 if raw_response.candidates:
                     for j, candidate in enumerate(raw_response.candidates):
                         lines.append(f"  Candidate {j}:")
                         lines.append(f"    finish_reason: {candidate.finish_reason}")
                         if hasattr(candidate, 'safety_ratings') and candidate.safety_ratings:
-                            lines.append(f"    safety_ratings:")
+                            lines.append("    safety_ratings:")
                             for rating in candidate.safety_ratings:
                                 lines.append(f"      {rating.category}: {rating.probability}")
                 if hasattr(raw_response, 'prompt_feedback'):

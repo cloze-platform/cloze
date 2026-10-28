@@ -5,8 +5,7 @@ Main orchestrator for report generation. Coordinates components,
 renderers, and output formats.
 """
 
-from typing import Dict, Any, Optional
-from pathlib import Path
+from typing import Dict, Any
 import time
 import json
 import os
@@ -33,7 +32,7 @@ except (ImportError, OSError) as e:
     print(f"Warning: WeasyPrint not available for PDF generation: {e}")
 
 from sqlalchemy.exc import OperationalError
-from llm_chat.models import ChatWindow, Conversation, Message, Report
+from llm_chat.models import ChatWindow, Conversation, Report
 from llm_chat.extensions import db
 from report.components import get_all_components
 from report.renderers.html_renderer import HTMLRenderer
@@ -85,7 +84,7 @@ class UnifiedReportGenerator:
 
     def generate(self) -> Dict[str, Any]:
         """Generate all configured report components."""
-        from report.config import get_enabled_component_keys, is_feature_enabled
+        from report.config import get_enabled_component_keys
 
         # Build metadata
         report_data = {

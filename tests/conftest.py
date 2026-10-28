@@ -12,7 +12,7 @@ import pytest
 
 from llm_chat import create_app
 from llm_chat.extensions import db as _db
-from llm_chat.models.core import User, ProviderPatient
+from llm_chat.models.core import User
 
 
 @pytest.fixture

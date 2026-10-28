@@ -1,7 +1,7 @@
 import json
 import time
 from datetime import datetime
-from flask import Blueprint, render_template, jsonify, request, abort, redirect, url_for, current_app
+from flask import Blueprint, render_template, jsonify, request, abort, redirect, current_app
 from flask_login import login_required, current_user
 from ..extensions import db
 from ..models import (
@@ -9,7 +9,7 @@ from ..models import (
     Conversation, Model, Message, SavedSelection, ChatWindow, ChatTemplate
 )
 from ..services.llm_interface import LLMInterface
-from ..models import AdminSettings, ProviderFeatureFlags
+from ..models import ProviderFeatureFlags
 from ..utils.settings_resolution import get_effective_setting, get_provider_id_for_patient
 from ..utils.access_hours import within_access_window
 
@@ -734,7 +734,7 @@ def _compile_disclaimer_blocks(blocks):
             lines = content.split('\n')
             list_items = [l for l in lines if l.strip().startswith('-')]
             plain = [l for l in lines if not l.strip().startswith('-')]
-            html = f'<div class="rounded-lg border-l-4 border-amber-400 bg-amber-50 p-4 my-4">'
+            html = '<div class="rounded-lg border-l-4 border-amber-400 bg-amber-50 p-4 my-4">'
             html += f'<h3 class="text-sm font-semibold text-amber-800 mb-2">{boldify(title)}</h3>'
             if plain:
                 html += f'<p class="text-sm text-amber-900 mb-2">{boldify(" ".join(plain))}</p>'
@@ -747,7 +747,7 @@ def _compile_disclaimer_blocks(blocks):
             parts.append(html)
         elif btype == 'alert':
             title = block.get('title', 'Alert')
-            html = f'<div class="rounded-lg border-l-4 border-red-500 bg-red-50 p-4 my-4">'
+            html = '<div class="rounded-lg border-l-4 border-red-500 bg-red-50 p-4 my-4">'
             html += f'<h3 class="text-sm font-semibold text-red-900 mb-2">{boldify(title)}</h3>'
             html += f'<p class="text-sm text-red-900">{boldify(content)}</p>'
             html += '</div>'

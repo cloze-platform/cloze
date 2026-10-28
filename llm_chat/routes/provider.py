@@ -69,7 +69,6 @@ def get_provider_patients():
 @role_required('provider')
 def get_all_provider_conversations():
     """Get all conversations AND unstarted templates across all patients."""
-    from ..models import Message, Model
     patient_ids = [pp.patient_id for pp in current_user.patients]
     if not patient_ids:
         return jsonify([])

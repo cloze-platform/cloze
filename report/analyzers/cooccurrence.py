@@ -6,7 +6,7 @@ relationships in text. Creates a network graph showing which words appear
 together frequently.
 """
 
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 from collections import Counter
 import base64
 from io import BytesIO
@@ -24,7 +24,6 @@ except ImportError:
     VISUALIZATION_AVAILABLE = False
 
 try:
-    import nltk
     from nltk.corpus import stopwords
     from nltk.tokenize import word_tokenize
     NLTK_AVAILABLE = True

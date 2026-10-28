@@ -71,7 +71,7 @@ def main():
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(html_content)
 
-            print(f"✓ Report saved successfully!")
+            print("✓ Report saved successfully!")
             print(f"Location: {output_path}")
             print()
             print("You can now open this HTML file in your browser.")

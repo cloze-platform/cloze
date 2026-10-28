@@ -1,8 +1,6 @@
 import time
-import json
 import requests
 from ..extensions import db
-from .settings import SystemPrompt
 
 class Model(db.Model):
     __tablename__ = 'models'

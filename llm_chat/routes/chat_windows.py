@@ -1,10 +1,9 @@
 import json
 import time
-from datetime import datetime
 from flask import Blueprint, jsonify, request, abort
 from flask_login import login_required, current_user
 from ..extensions import db
-from ..models import ChatWindow, ChatTemplate, User, Conversation, Model, SystemPrompt, SafetyPlan, ProviderFeatureFlags
+from ..models import ChatWindow, ChatTemplate, User, Conversation, SafetyPlan, ProviderFeatureFlags
 from ..utils.settings_resolution import get_effective_setting
 
 window_bp = Blueprint("chat_windows", __name__, url_prefix="/api/windows")

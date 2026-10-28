@@ -2,12 +2,11 @@ import json
 import os
 import secrets
 import time
-from pathlib import Path
 from flask import Flask
 from llm_chat import create_app
 from llm_chat.extensions import db
 from llm_chat.models import (
-    User, ProviderPatient, ProviderSettings, SystemPrompt,
+    User, ProviderPatient, SystemPrompt,
     Model, Conversation, Message, ChatWindow, ChatTemplate, SafetyPlan
 )
 from llm_chat.services.llm_interface import LLMInterface
@@ -409,7 +408,7 @@ def initialize_database():
                 })
                 plan2.provider_notes = 'New patient. Intake completed. Awaiting patient safety plan input.'
                 db.session.add(plan2)
-                print(f"Created draft safety plan for user2")
+                print("Created draft safety plan for user2")
 
         # Commit all changes at once
         try:
