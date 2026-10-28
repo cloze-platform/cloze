@@ -217,7 +217,7 @@ def update_provider_sections(plan_id):
     if not current_user.is_provider() and not current_user.is_admin():
         abort(403)
 
-    plan = SafetyPlan.query.get_or_404(plan_id)
+    plan = db.get_or_404(SafetyPlan, plan_id)
     if not current_user.can_access_patient(plan.patient_id):
         abort(403)
 
@@ -245,7 +245,7 @@ def approve_plan(plan_id):
     if not current_user.is_provider() and not current_user.is_admin():
         abort(403)
 
-    plan = SafetyPlan.query.get_or_404(plan_id)
+    plan = db.get_or_404(SafetyPlan, plan_id)
     if not current_user.can_access_patient(plan.patient_id):
         abort(403)
 
@@ -272,7 +272,7 @@ def reject_plan(plan_id):
     if not current_user.is_provider() and not current_user.is_admin():
         abort(403)
 
-    plan = SafetyPlan.query.get_or_404(plan_id)
+    plan = db.get_or_404(SafetyPlan, plan_id)
     if not current_user.can_access_patient(plan.patient_id):
         abort(403)
 
@@ -315,7 +315,7 @@ def get_pending_reviews():
 
     result = []
     for plan in pending:
-        patient = User.query.get(plan.patient_id)
+        patient = db.session.get(User, plan.patient_id)
         result.append({
             'plan_id': plan.id,
             'patient_id': plan.patient_id,

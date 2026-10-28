@@ -36,7 +36,7 @@ def get_chat_windows():
 
         # Add patient name for provider view
         if current_user.is_provider() or current_user.is_admin():
-            patient = User.query.get(window.patient_id)
+            patient = db.session.get(User, window.patient_id)
             window_data['patient_name'] = patient.username if patient else 'Unknown'
 
         # Check if conversations exist for each template
@@ -61,7 +61,7 @@ def get_chat_window(window_id):
     if not current_user.is_provider():
         abort(403)
 
-    window = ChatWindow.query.get_or_404(window_id)
+    window = db.get_or_404(ChatWindow, window_id)
 
     # Check if provider owns this window
     if window.provider_id != current_user.id:
@@ -201,7 +201,7 @@ def update_chat_window(window_id):
     if not current_user.is_provider():
         abort(403)
 
-    window = ChatWindow.query.get_or_404(window_id)
+    window = db.get_or_404(ChatWindow, window_id)
 
     # Check if provider owns this window
     if window.provider_id != current_user.id:
@@ -280,7 +280,7 @@ def delete_chat_window(window_id):
     if not current_user.is_provider():
         abort(403)
 
-    window = ChatWindow.query.get_or_404(window_id)
+    window = db.get_or_404(ChatWindow, window_id)
 
     # Check if provider owns this window
     if window.provider_id != current_user.id:
@@ -305,7 +305,7 @@ def add_template_to_window(window_id):
     if not current_user.is_provider():
         abort(403)
 
-    window = ChatWindow.query.get_or_404(window_id)
+    window = db.get_or_404(ChatWindow, window_id)
     if window.provider_id != current_user.id:
         abort(403)
 
@@ -337,7 +337,7 @@ def start_conversation_from_template():
     data = request.json or {}
     template_id = data.get('template_id')
 
-    template = ChatTemplate.query.get_or_404(template_id)
+    template = db.get_or_404(ChatTemplate, template_id)
     window = template.window
 
     # Check if window is for current patient and is active

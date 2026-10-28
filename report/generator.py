@@ -52,7 +52,7 @@ class UnifiedReportGenerator:
                          If None, uses the value from window config.
         """
         self.window_id = window_id
-        self.window = ChatWindow.query.get(window_id)
+        self.window = db.session.get(ChatWindow, window_id)
         if not self.window:
             raise ValueError(f"ChatWindow with id {window_id} not found")
 

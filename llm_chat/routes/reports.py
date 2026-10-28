@@ -2,6 +2,7 @@ import json
 import tempfile
 from flask import Blueprint, jsonify, abort, request, send_file
 from flask_login import login_required, current_user
+from ..extensions import db
 from ..models import Report, ChatWindow
 from ..services.report_utils import generate_report_for_window, finalize_expired_windows
 from ..utils.settings_resolution import get_effective_setting
@@ -46,7 +47,7 @@ def get_reports():
 @login_required
 def get_report(report_id):
     """Get a specific report"""
-    report = Report.query.get_or_404(report_id)
+    report = db.get_or_404(Report, report_id)
 
     # Access control
     if current_user.is_patient() and report.patient_id != current_user.id:
@@ -80,7 +81,7 @@ def get_patient_reports(patient_id):
 @login_required
 def get_window_report(window_id):
     """Get report for a specific window"""
-    window = ChatWindow.query.get_or_404(window_id)
+    window = db.get_or_404(ChatWindow, window_id)
 
     # Access control
     if current_user.is_patient() and window.patient_id != current_user.id:
@@ -108,7 +109,7 @@ def generate_window_report(window_id):
     if not current_user.is_provider() and not current_user.is_admin():
         abort(403)
 
-    window = ChatWindow.query.get_or_404(window_id)
+    window = db.get_or_404(ChatWindow, window_id)
 
     # Verify provider owns this window
     if current_user.is_provider() and window.provider_id != current_user.id:
@@ -148,7 +149,7 @@ def check_scheduler():
 @login_required
 def get_report_html(report_id):
     """Get formatted HTML version of a report"""
-    report = Report.query.get_or_404(report_id)
+    report = db.get_or_404(Report, report_id)
 
     # Access control
     if current_user.is_patient() and report.patient_id != current_user.id:
@@ -175,7 +176,7 @@ def window_report_config(window_id):
     if not current_user.is_provider() and not current_user.is_admin():
         abort(403)
 
-    window = ChatWindow.query.get_or_404(window_id)
+    window = db.get_or_404(ChatWindow, window_id)
 
     # Verify provider owns this window
     if current_user.is_provider() and window.provider_id != current_user.id:
@@ -186,7 +187,6 @@ def window_report_config(window_id):
 
     elif request.method == "PUT":
         try:
-            from ..extensions import db
             from report.registry import get_registry
             data = request.json or {}
             config = data.get('config', {})
@@ -219,7 +219,7 @@ def generate_unified_window_report(window_id):
     if not current_user.is_provider() and not current_user.is_admin():
         abort(403)
 
-    window = ChatWindow.query.get_or_404(window_id)
+    window = db.get_or_404(ChatWindow, window_id)
 
     # Verify provider owns this window
     if current_user.is_provider() and window.provider_id != current_user.id:
@@ -239,7 +239,7 @@ def generate_unified_window_report(window_id):
 @login_required
 def download_report(report_id, format):
     """Download report in specified format (html or pdf)"""
-    report = Report.query.get_or_404(report_id)
+    report = db.get_or_404(Report, report_id)
 
     # Access control
     if current_user.is_patient() and report.patient_id != current_user.id:
@@ -254,7 +254,7 @@ def download_report(report_id, format):
 @login_required
 def download_window_report(window_id, report_type, format):
     """Download report by window ID and report type (summary or detailed)."""
-    window = ChatWindow.query.get_or_404(window_id)
+    window = db.get_or_404(ChatWindow, window_id)
 
     # Access control
     if current_user.is_patient() and window.patient_id != current_user.id:
@@ -277,7 +277,7 @@ def download_window_report(window_id, report_type, format):
 
 def _send_report_download(report, format):
     """Shared helper to send a report download in the requested format."""
-    window = ChatWindow.query.get(report.window_id)
+    window = db.session.get(ChatWindow, report.window_id)
     report_data = json.loads(report.report_data)
     rt = report_data.get('report_type', 'summary')
     slug = window.title.replace(' ', '_')
@@ -333,7 +333,7 @@ def _send_report_download(report, format):
 @login_required
 def get_live_report(window_id):
     """Generate and return a live report without saving to database"""
-    window = ChatWindow.query.get_or_404(window_id)
+    window = db.get_or_404(ChatWindow, window_id)
 
     # Access control
     if current_user.is_patient() and window.patient_id != current_user.id:
