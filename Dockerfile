@@ -21,8 +21,8 @@ RUN chmod 644 /etc/ssl/certs/rds-global-bundle.pem
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+COPY requirements.txt constraints.txt ./
+RUN pip install -r requirements.txt -c constraints.txt
 
 COPY . .
 
