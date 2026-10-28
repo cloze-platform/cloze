@@ -43,7 +43,7 @@ def initialize_database():
         print("Database tables created/verified")
 
         # Initialize LLM clients
-        LLMInterface.initialize_clients()
+        LLMInterface.initialize_clients(app.config)
 
         # Track credentials for newly created users
         new_credentials = []
@@ -117,15 +117,15 @@ def initialize_database():
                 Model(name='Gemini 2.0 Flash', provider='google', model_identifier='gemini-2.0-flash',
                       config=json.dumps({'temperature': 0.7, 'max_tokens': 1000})),
                 Model(name='Llama 3.2 1B (Fast)', provider='local',
-                      api_endpoint=f"{os.environ.get('OLLAMA_HOST', 'http://localhost:11434')}/v1/chat/completions",
+                      api_endpoint=f"{app.config['OLLAMA_HOST']}/v1/chat/completions",
                       model_identifier='llama3.2:1b',
                       config=json.dumps({'temperature': 0.7, 'max_tokens': 2000})),
                 Model(name='Llama 3.2 3B (Balanced)', provider='local',
-                      api_endpoint=f"{os.environ.get('OLLAMA_HOST', 'http://localhost:11434')}/v1/chat/completions",
+                      api_endpoint=f"{app.config['OLLAMA_HOST']}/v1/chat/completions",
                       model_identifier='llama3.2:3b',
                       config=json.dumps({'temperature': 0.7, 'max_tokens': 2000})),
                 Model(name='Llama 3.1 8B (Quality)', provider='local',
-                      api_endpoint=f"{os.environ.get('OLLAMA_HOST', 'http://localhost:11434')}/v1/chat/completions",
+                      api_endpoint=f"{app.config['OLLAMA_HOST']}/v1/chat/completions",
                       model_identifier='llama3.1:8b',
                       config=json.dumps({'temperature': 0.7, 'max_tokens': 2000})),
             ]

@@ -1,9 +1,8 @@
-import os
-import secrets
 from pathlib import Path
 from dotenv import load_dotenv
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
+from .config import load_config
 from .extensions import db, migrate, login_manager
 from .routes.auth import auth_bp
 from .routes.auth import auth_blp
@@ -31,15 +30,8 @@ def create_app():
     # Trust proxy headers (for Cloudflare/reverse proxy HTTPS)
     app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
-    # Read from environment (with fallbacks)
-    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", secrets.token_hex(32))
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///llm_chat.db")
-    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-    # Session cookie security
-    app.config["SESSION_COOKIE_SECURE"] = os.environ.get("FLASK_ENV") == "production"
-    app.config["SESSION_COOKIE_HTTPONLY"] = True
-    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    # All environment-driven settings; raises ConfigError if production is misconfigured.
+    app.config.update(load_config())
     app.config.update(
         API_TITLE="My API",
         API_VERSION="v1",
@@ -71,7 +63,7 @@ def create_app():
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
         response.headers['X-XSS-Protection'] = '1; mode=block'
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-        if os.environ.get("FLASK_ENV") == "production":
+        if app.config["PRODUCTION"]:
             response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
         return response
 
@@ -120,6 +112,6 @@ def create_app():
 
     # Initialize LLM provider clients
     from .services.llm_interface import LLMInterface
-    LLMInterface.initialize_clients()
+    LLMInterface.initialize_clients(app.config)
 
     return app

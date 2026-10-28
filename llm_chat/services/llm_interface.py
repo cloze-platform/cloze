@@ -1,11 +1,7 @@
-import os
 import time
 import json
 import requests
 from typing import List, Dict, Optional, Tuple
-
-# Ollama host configuration (default: localhost for local development)
-OLLAMA_HOST = os.environ.get('OLLAMA_HOST', 'http://localhost:11434')
 
 # Provider clients (optional imports)
 try:
@@ -29,10 +25,10 @@ class LLMInterface:
     _provider_clients: Dict[str, object] = {}
 
     @classmethod
-    def initialize_clients(cls):
-        """Initialize provider clients based on available API keys"""
+    def initialize_clients(cls, config):
+        """Initialize provider clients based on the API keys in the app config."""
         # OpenAI
-        openai_key = os.environ.get('OPENAI_API_KEY')
+        openai_key = config.get('OPENAI_API_KEY')
         if OpenAI and openai_key and openai_key.strip() and openai_key != 'your_openai_key_here':
             try:
                 cls._provider_clients['openai'] = OpenAI(api_key=openai_key)
@@ -52,7 +48,7 @@ class LLMInterface:
             print(f"✗ OpenAI API key not configured or invalid: {', '.join(reasons)}")
 
         # Anthropic
-        anthropic_key = os.environ.get('ANTHROPIC_API_KEY')
+        anthropic_key = config.get('ANTHROPIC_API_KEY')
         if Anthropic and anthropic_key and anthropic_key.strip() and anthropic_key != 'your_anthropic_key_here':
             try:
                 cls._provider_clients['anthropic'] = Anthropic(api_key=anthropic_key)
@@ -72,7 +68,7 @@ class LLMInterface:
             print(f"✗ Anthropic API key not configured or invalid: {', '.join(reasons)}")
 
         # Google
-        google_key = os.environ.get('GOOGLE_API_KEY')
+        google_key = config.get('GOOGLE_API_KEY')
         if genai and google_key and google_key.strip() and google_key != 'your_google_api_key_here':
             try:
                 client = genai.Client(api_key=google_key)
@@ -84,18 +80,19 @@ class LLMInterface:
             print("✗ Google API key not configured or invalid")
 
         # Local Ollama
+        ollama_host = config['OLLAMA_HOST']
         try:
-            ollama_url = f"{OLLAMA_HOST}/api/tags"
+            ollama_url = f"{ollama_host}/api/tags"
             response = requests.get(ollama_url, timeout=2)
             if response.status_code == 200:
                 cls._provider_clients['local'] = True
                 models = response.json().get('models', [])
                 model_names = [m['name'] for m in models]
-                print(f"✓ Ollama server detected at {OLLAMA_HOST} with models: {model_names}")
+                print(f"✓ Ollama server detected at {ollama_host} with models: {model_names}")
             else:
-                print(f"✗ Ollama server at {OLLAMA_HOST} responded but with an error")
+                print(f"✗ Ollama server at {ollama_host} responded but with an error")
         except requests.exceptions.RequestException:
-            print(f"✗ Ollama server not available at {OLLAMA_HOST}")
+            print(f"✗ Ollama server not available at {ollama_host}")
 
         print("\n=== LLM Client Status ===")
         print(f"Initialized providers: {list(cls._provider_clients.keys())}")
