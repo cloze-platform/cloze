@@ -11,6 +11,7 @@ CONFIG_VARS = (
     "FLASK_ENV", "SECRET_KEY", "DATABASE_URL", "CLOZE_PUBLIC_URL",
     "CLOZE_GUARD_SENDER", "AWS_SES_REGION", "CLOZE_GUARD_AWS_PROFILE",
     "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "OLLAMA_HOST",
+    "CLOZE_REPORTS_ENABLED",
 )
 
 
@@ -61,6 +62,22 @@ def test_trailing_slashes_are_trimmed(clean_env):
     config = load_config()
     assert config["CLOZE_PUBLIC_URL"] == "https://cloze.example.org"
     assert config["OLLAMA_HOST"] == "http://10.0.0.5:11434"
+
+
+@pytest.mark.parametrize("raw, expected", [
+    (None, True), ("true", True), ("1", True), ("On", True),
+    ("false", False), ("0", False), ("NO", False), ("off", False),
+])
+def test_reports_switch_parsing(clean_env, raw, expected):
+    if raw is not None:
+        clean_env.setenv("CLOZE_REPORTS_ENABLED", raw)
+    assert load_config()["CLOZE_REPORTS_ENABLED"] is expected
+
+
+def test_reports_switch_rejects_typos(clean_env):
+    clean_env.setenv("CLOZE_REPORTS_ENABLED", "flase")
+    with pytest.raises(ConfigError, match="CLOZE_REPORTS_ENABLED"):
+        load_config()
 
 
 # --- Production checks ---------------------------------------------------------

@@ -341,6 +341,9 @@ def get_live_report(window_id):
     elif current_user.is_provider() and window.provider_id != current_user.id:
         abort(403)
 
+    if not get_effective_setting('enable_nlp_report', window.provider_id, True):
+        return jsonify({'error': 'NLP reports are disabled for this provider'}), 403
+
     try:
         generator = UnifiedReportGenerator(window_id)
         report_data = generator.generate()

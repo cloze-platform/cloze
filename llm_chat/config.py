@@ -20,6 +20,19 @@ def _env(name, default=None):
     return value or default
 
 
+def _flag(name, default):
+    """Read an on/off environment variable; anything unrecognised is an error."""
+    value = _env(name)
+    if value is None:
+        return default
+    lowered = value.lower()
+    if lowered in ("1", "true", "yes", "on"):
+        return True
+    if lowered in ("0", "false", "no", "off"):
+        return False
+    raise ConfigError(f"{name} must be true or false, got {value!r}")
+
+
 def load_config():
     """Build the Flask config dict from the environment.
 
@@ -58,6 +71,9 @@ def load_config():
         "SESSION_COOKIE_SECURE": production,
         "SESSION_COOKIE_HTTPONLY": True,
         "SESSION_COOKIE_SAMESITE": "Lax",
+        # Instance-wide switch for report generation (NLP analysis and AI
+        # summaries). When false it overrides every admin and provider setting.
+        "CLOZE_REPORTS_ENABLED": _flag("CLOZE_REPORTS_ENABLED", True),
         # Base URL of this instance, used in links inside outgoing email.
         "CLOZE_PUBLIC_URL": (public_url or "http://localhost:5051").rstrip("/"),
         # LLM providers: each is enabled only if its key is set.
