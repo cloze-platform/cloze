@@ -188,6 +188,17 @@ variable "reports_enabled" {
   default     = true
 }
 
+variable "theme" {
+  description = "Instance colours (#RRGGBB) overriding any of the Cloze palette: primary, hover, accent, tint, on_dark, on_dark_hover, dark_page, dark_sidebar, dark_card, dark_raised, dark_border. See llm_chat/theme.py."
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition     = alltrue([for k, v in var.theme : contains(["primary", "hover", "accent", "tint", "on_dark", "on_dark_hover", "dark_page", "dark_sidebar", "dark_card", "dark_raised", "dark_border"], k) && can(regex("^#[0-9A-Fa-f]{6}$", v))])
+    error_message = "theme keys must be Cloze palette names (see the description) and values #RRGGBB colours."
+  }
+}
+
 variable "guard_sender_email" {
   description = "From address for Cloze-Guard alerts (must be on the verified SES domain). Empty disables alert emails."
   type        = string

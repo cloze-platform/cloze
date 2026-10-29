@@ -9,15 +9,15 @@
   .tab-panel { color: #d6d3d1; }
 
   /* Cards and sections */
-  .tab-panel section { border-color: #2a2535 !important; }
-  .tab-panel .bg-white { background: #221f2e !important; }
-  .tab-panel .bg-violet-50\/40, .tab-panel .bg-violet-50\/60 { background: #2a2535 !important; }
-  .tab-panel .bg-muted { background: #2a2535 !important; }
+  .tab-panel section { border-color: var(--dark-raised) !important; }
+  .tab-panel .bg-white { background: var(--dark-card) !important; }
+  .tab-panel .bg-violet-50\/40, .tab-panel .bg-violet-50\/60 { background: var(--dark-raised) !important; }
+  .tab-panel .bg-muted { background: var(--dark-raised) !important; }
 
   /* Borders */
   .tab-panel .border-stone-200, .tab-panel .border-stone-100,
-  .tab-panel .border-violet-100 { border-color: #2a2535 !important; }
-  .tab-panel .divide-stone-100 > * + * { border-color: #2a2535 !important; }
+  .tab-panel .border-violet-100 { border-color: var(--dark-raised) !important; }
+  .tab-panel .divide-stone-100 > * + * { border-color: var(--dark-raised) !important; }
 
   /* Text */
   .tab-panel .text-stone-900 { color: #f5f5f4 !important; }
@@ -27,62 +27,62 @@
   .tab-panel .text-stone-500 { color: #a8a29e !important; }
 
   /* Stat cards */
-  .tab-panel .bg-violet-50\/40 { background: #2a2535 !important; }
-  .tab-panel .border-violet-100 { border-color: #3a3545 !important; }
+  .tab-panel .bg-violet-50\/40 { background: var(--dark-raised) !important; }
+  .tab-panel .border-violet-100 { border-color: var(--dark-border) !important; }
 
   /* Tables */
   .tab-panel table { color: #d6d3d1; }
-  .tab-panel thead tr { background: #2a2535 !important; border-color: #3a3545 !important; }
+  .tab-panel thead tr { background: var(--dark-raised) !important; border-color: var(--dark-border) !important; }
   .tab-panel th { color: #a8a29e !important; }
-  .tab-panel tbody tr { border-color: #2a2535 !important; }
-  .tab-panel tbody tr:hover { background: #2a2535 !important; }
+  .tab-panel tbody tr { border-color: var(--dark-raised) !important; }
+  .tab-panel tbody tr:hover { background: var(--dark-raised) !important; }
 
   /* Inputs and selects */
   .tab-panel input, .tab-panel select, .tab-panel textarea {
-    background: #1c1926 !important;
-    border-color: #3a3545 !important;
+    background: var(--dark-page) !important;
+    border-color: var(--dark-border) !important;
     color: #d6d3d1 !important;
   }
   .tab-panel input:focus, .tab-panel select:focus, .tab-panel textarea:focus {
-    border-color: #5B5FC7 !important;
+    border-color: var(--brand-primary) !important;
   }
   .tab-panel input::placeholder { color: #4a4555 !important; }
 
   /* Buttons */
-  .tab-panel .bg-cloze-indigo { background: #5B5FC7 !important; }
-  .tab-panel .hover\:bg-stone-50:hover { background: #2a2535 !important; }
+  .tab-panel .bg-cloze-indigo { background: var(--brand-primary) !important; }
+  .tab-panel .hover\:bg-stone-50:hover { background: var(--dark-raised) !important; }
 
   /* Badges */
   .tab-panel .bg-emerald-50 { background: rgba(16, 185, 129, 0.15) !important; }
   .tab-panel .bg-red-50 { background: rgba(239, 68, 68, 0.15) !important; }
   .tab-panel .bg-amber-100 { background: rgba(251, 191, 36, 0.15) !important; }
-  .tab-panel .bg-stone-100 { background: #2a2535 !important; }
+  .tab-panel .bg-stone-100 { background: var(--dark-raised) !important; }
 
   /* Drill-down panels */
-  .tab-panel .bg-stone-50 { background: #1c1926 !important; }
+  .tab-panel .bg-stone-50 { background: var(--dark-page) !important; }
 
   /* Provider feature flags */
-  .tab-panel .rounded-lg.border { border-color: #2a2535 !important; }
+  .tab-panel .rounded-lg.border { border-color: var(--dark-raised) !important; }
 
   /* Modals stay light — they float above */
-  .modal .bg-white { background: #2a2535 !important; }
+  .modal .bg-white { background: var(--dark-raised) !important; }
   .modal .text-stone-900 { color: #f5f5f4 !important; }
   .modal .text-stone-700 { color: #d6d3d1 !important; }
   .modal .text-stone-600 { color: #a8a29e !important; }
   .modal .text-stone-500 { color: #a8a29e !important; }
-  .modal .border-stone-200 { border-color: #3a3545 !important; }
+  .modal .border-stone-200 { border-color: var(--dark-border) !important; }
   .modal input, .modal select, .modal textarea {
-    background: #1c1926 !important;
-    border-color: #3a3545 !important;
+    background: var(--dark-page) !important;
+    border-color: var(--dark-border) !important;
     color: #d6d3d1 !important;
   }
 
   /* Prompt editor */
-  .tab-panel #promptsListPanel { background: #1c1926 !important; }
-  .tab-panel #promptsListPanel > div:hover { background: #2a2535 !important; }
+  .tab-panel #promptsListPanel { background: var(--dark-page) !important; }
+  .tab-panel #promptsListPanel > div:hover { background: var(--dark-raised) !important; }
 
   /* Checkboxes */
-  .tab-panel input[type="checkbox"] { accent-color: #5B5FC7; }
+  .tab-panel input[type="checkbox"] { accent-color: var(--brand-primary); }
 </style>
 {% endblock %}
 

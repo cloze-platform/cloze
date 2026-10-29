@@ -150,6 +150,10 @@ Log in, check a chat works, then stop the task: `aws ecs stop-task --profile <pr
 
 **9. Go live.** When `cloze.certificate_status` says `ISSUED`, set `enable_https = true`, then plan and apply. This adds the HTTPS listener and starts the web service. Then add a CNAME from your hostname to `cloze.load_balancer_dns_name` (DNS only, on Cloudflare).
 
+## Instance colours
+
+Set `theme` in `terraform.tfvars` to give an instance its own palette, then plan and apply. Any of `primary`, `hover`, `accent`, `tint`, `on_dark`, `on_dark_hover`, `dark_page`, `dark_sidebar`, `dark_card`, `dark_raised` and `dark_border` can be set; the rest keep the Cloze palette. A custom `primary` also recolours the soft tints the app derives from it. The app checks the values at startup and refuses to start on a typo.
+
 ## Deploying a new version
 
 1. Build it (step 7) from the release tag or commit.

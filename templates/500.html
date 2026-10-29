@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Something went wrong — Cloze</title>
   <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+  {% include "_theme_vars.html" %}
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -43,12 +44,12 @@
       margin-top: 2rem;
       font-size: 0.875rem;
       font-weight: 500;
-      color: #5B5FC7;
+      color: var(--brand-primary);
       text-decoration: none;
       transition: color 0.15s;
     }
 
-    .link:hover { color: #4E51B0; }
+    .link:hover { color: var(--brand-hover); }
 
     .logo {
       width: 96px;
@@ -57,11 +58,11 @@
     }
 
     @media (prefers-color-scheme: dark) {
-      body { background: #1c1926; color: #d6d3d1; }
+      body { background: var(--dark-page); color: #d6d3d1; }
       .code { color: #f5f5f4; }
       .message { color: #a8a29e; }
-      .link { color: #c4b5fd; }
-      .link:hover { color: #ddd6fe; }
+      .link { color: var(--brand-on-dark); }
+      .link:hover { color: var(--brand-on-dark-hover); }
       .logo { content: url('/static/images/logo-dark.svg'); }
     }
   </style>

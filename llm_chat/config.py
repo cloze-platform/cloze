@@ -9,6 +9,8 @@ boot instead of half-working.
 import os
 import secrets
 
+from .theme import load_theme
+
 
 class ConfigError(RuntimeError):
     """Raised at startup when production configuration is missing or invalid."""
@@ -44,6 +46,11 @@ def load_config():
     public_url = _env("CLOZE_PUBLIC_URL")
     guard_sender = _env("CLOZE_GUARD_SENDER")
 
+    try:
+        theme = load_theme(_env("CLOZE_THEME"))
+    except ValueError as e:
+        raise ConfigError(str(e)) from None
+
     if production:
         problems = []
         if not secret_key:
@@ -77,6 +84,8 @@ def load_config():
         # Instance-wide switch for report generation (NLP analysis and AI
         # summaries). When false it overrides every admin and provider setting.
         "CLOZE_REPORTS_ENABLED": _flag("CLOZE_REPORTS_ENABLED", True),
+        # Instance colours: optional JSON overrides of the Cloze palette (see theme.py).
+        "CLOZE_THEME": theme,
         # Base URL of this instance, used in links inside outgoing email.
         "CLOZE_PUBLIC_URL": (public_url or "http://localhost:5051").rstrip("/"),
         # LLM providers: each is enabled only if its key is set.

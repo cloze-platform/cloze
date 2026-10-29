@@ -6,22 +6,9 @@
   <title>Sign in — Cloze</title>
   <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            'page':          '#FAF9F7',
-            'cloze-indigo':  '#5B5FC7',
-            'cloze-hover':   '#4E51B0',
-            'cloze-lavender':'#EEEAF6',
-          }
-        }
-      }
-    };
-  </script>
+  {% include "_tailwind_theme.html" %}
 </head>
-<body class="min-h-screen bg-[#EEEAF6] flex items-center justify-center p-4 antialiased">
+<body class="min-h-screen bg-cloze-lavender flex items-center justify-center p-4 antialiased">
 
   <div class="w-full max-w-sm">
     {# Logo + title #}
@@ -66,7 +53,7 @@
         </div>
 
         <button type="submit" id="loginBtn"
-                class="w-full rounded-md bg-[#312E81] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#3D3A94] disabled:opacity-50 disabled:cursor-not-allowed">
+                class="w-full rounded-md bg-cloze-action px-4 py-2.5 text-sm font-medium text-white transition hover:bg-cloze-action-hover disabled:opacity-50 disabled:cursor-not-allowed">
           Sign in as Participant
         </button>
       </form>
