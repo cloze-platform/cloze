@@ -51,6 +51,7 @@ module "cloze" {
   image_tag          = var.image_tag
   reports_enabled    = var.reports_enabled
   guard_sender_email = var.guard_sender_email
+  theme              = var.theme
 }
 
 output "cloze" {

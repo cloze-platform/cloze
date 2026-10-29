@@ -6,20 +6,20 @@
 {% block styles %}
 <style>
   .chat-list-row { transition: color 0.1s; cursor: pointer; }
-  .chat-list-row:hover { color: #4338CA; }
+  .chat-list-row:hover { color: var(--soft-700); }
   .chat-list-row:hover .row-arrow { opacity: 1; }
   .chat-list-row.unstarted { opacity: 0.5; cursor: default; }
   .chat-list-row.unstarted:hover { color: inherit; }
   .row-arrow { opacity: 0; transition: opacity 0.15s; }
   .filter-input { border: none; border-bottom: 1px solid #E5E7EB; background: transparent;
     outline: none; transition: border-color 0.15s; }
-  .filter-input:focus { border-bottom-color: #A78BFA; }
+  .filter-input:focus { border-bottom-color: var(--soft-400); }
 
   @media (prefers-color-scheme: dark) {
-    .chat-list-row:hover { color: #c4b5fd !important; }
+    .chat-list-row:hover { color: var(--brand-on-dark) !important; }
     .chat-list-row.unstarted:hover { color: #a8a29e !important; }
-    .filter-input { border-color: #3a3545 !important; color: #d6d3d1 !important; }
-    .filter-input:focus { border-color: #c4b5fd !important; }
+    .filter-input { border-color: var(--dark-border) !important; color: #d6d3d1 !important; }
+    .filter-input:focus { border-color: var(--brand-on-dark) !important; }
   }
 </style>
 {% endblock %}

@@ -32,9 +32,9 @@
   .message-group { padding: 0.5rem 0; width: 100%; }
   .message-group:hover .message-time { opacity: 1; }
   .message-time { opacity: 0; transition: opacity 0.15s; }
-  .user-bubble { background: #E9E5F5; border-radius: 1.125rem 1.125rem 0.25rem 1.125rem;
+  .user-bubble { background: var(--bubble); border-radius: 1.125rem 1.125rem 0.25rem 1.125rem;
     padding: 0.875rem 1.125rem; max-width: 75%; }
-  .user-bubble .message-text { color: #2D2A3E; }
+  .user-bubble .message-text { color: var(--bubble-text); }
   .ai-msg { max-width: 90%; }
 
   /* Markdown prose */
@@ -52,37 +52,41 @@
   .message-text blockquote { border-left: 3px solid #D6D3D1; padding-left: 1em; margin: 0.75em 0; color: #78716C; }
   .message-text strong, .message-text b { font-weight: 600; color: #1C1917; }
   .message-text em, .message-text i { font-style: italic; }
-  .message-text::selection { background: #C4B5FD; color: #1C1917; }
+  .message-text::selection { background: var(--soft-300); color: #1C1917; }
 
   /* ── Auto dark mode (follows OS preference) ── */
   @media (prefers-color-scheme: dark) {
     /* Body & page-level */
-    body { background: #1c1926 !important; color: #d6d3d1 !important; }
+    body { background: var(--dark-page) !important; color: #d6d3d1 !important; }
 
     /* Logo — swap to lighter orbit variant */
     #sidebar img[alt="Cloze"] { content: url('/static/images/logo-dark.svg'); }
 
     /* Sidebar */
-    #sidebar { background: #15121e !important; border-color: #2a2535 !important; }
-    #sidebar .border-b, #sidebar .border-t { border-color: #2a2535 !important; }
+    #sidebar { background: var(--dark-sidebar) !important; border-color: var(--dark-raised) !important; }
+    #sidebar .border-b, #sidebar .border-t { border-color: var(--dark-raised) !important; }
     #sidebar span.text-stone-900 { color: #f5f5f4 !important; }
     #sidebar .text-stone-700 { color: #a8a29e !important; }
     #sidebar .text-stone-600 { color: #a8a29e !important; }
     #sidebar .text-stone-400 { color: #78716c !important; }
     #sidebar button:hover, #sidebar .sidebar-conv:hover { background: rgba(255,255,255,0.05) !important; }
     #sidebar .bg-cloze-lavender { background: rgba(255,255,255,0.08) !important; }
-    #sidebar .text-cloze-indigo { color: #c4b5fd !important; }
+    #sidebar .text-cloze-indigo { color: var(--brand-on-dark) !important; }
+    /* Brand indigo text and lavender highlights elsewhere on the page, as in the sidebar */
+    .text-cloze-indigo { color: var(--brand-on-dark) !important; }
+    .hover\:text-cloze-hover:hover { color: var(--brand-on-dark-hover) !important; }
+    .bg-cloze-lavender { background: rgba(255,255,255,0.08) !important; }
     #sidebarConversations .text-stone-400 { color: #78716c !important; }
 
     /* Mobile header */
-    #mobileMenuBar { background: #1c1926 !important; border-color: #2a2535 !important; }
+    #mobileMenuBar { background: var(--dark-page) !important; border-color: var(--dark-raised) !important; }
     #mobileTitle { color: #d6d3d1 !important; }
 
     /* Overlay */
     #overlay { background: rgba(0,0,0,0.5) !important; }
 
     /* ── Home view ── */
-    #homeView { background: #1c1926 !important; }
+    #homeView { background: var(--dark-page) !important; }
     #homeView h1 { color: #f5f5f4 !important; }
     #homeView .text-stone-900 { color: #f5f5f4 !important; }
     #homeView .text-stone-700 { color: #d6d3d1 !important; }
@@ -91,10 +95,10 @@
     #homeView .text-stone-400 { color: #78716c !important; }
 
     /* Home cards and sections */
-    #homeView .bg-white { background: #221f2e !important; }
-    #homeView .border-stone-200 { border-color: #2a2535 !important; }
-    #homeView .border-stone-100 { border-color: #2a2535 !important; }
-    #homeView .hover\:bg-stone-50:hover { background: #2a2535 !important; }
+    #homeView .bg-white { background: var(--dark-card) !important; }
+    #homeView .border-stone-200 { border-color: var(--dark-raised) !important; }
+    #homeView .border-stone-100 { border-color: var(--dark-raised) !important; }
+    #homeView .hover\:bg-stone-50:hover { background: var(--dark-raised) !important; }
 
     /* Safety gating banner */
     #safetyPlanGating { background: rgba(245,158,11,0.1) !important; border-color: rgba(245,158,11,0.25) !important; }
@@ -104,116 +108,116 @@
     /* Home action card icon circles */
     #actionCards .bg-emerald-50 { background: rgba(16,185,129,0.15) !important; }
     #actionCards .text-emerald-600 { color: #6ee7b7 !important; }
-    #actionCards .bg-cloze-indigo\/10 { background: rgba(91,95,199,0.15) !important; }
-    #actionCards .bg-violet-50 { background: rgba(139,92,246,0.15) !important; }
-    #actionCards .text-violet-600 { color: #c4b5fd !important; }
-    #actionCards .hover\:bg-violet-50:hover { background: #2a2535 !important; }
-    #actionCards .hover\:bg-violet-50\/30:hover { background: #2a2535 !important; }
+    #actionCards .bg-cloze-indigo\/10 { background: rgb(var(--brand-primary-rgb) / 0.15) !important; }
+    #actionCards .bg-violet-50 { background: rgb(var(--soft-500-rgb) / 0.15) !important; }
+    #actionCards .text-violet-600 { color: var(--brand-on-dark) !important; }
+    #actionCards .hover\:bg-violet-50:hover { background: var(--dark-raised) !important; }
+    #actionCards .hover\:bg-violet-50\/30:hover { background: var(--dark-raised) !important; }
 
     /* Empty state */
-    #homeEmpty { background: #221f2e !important; border-color: #3a3545 !important; }
+    #homeEmpty { background: var(--dark-card) !important; border-color: var(--dark-border) !important; }
 
     /* ── Conversation view ── */
-    #conversationView header { background: #1c1926 !important; border-color: #2a2535 !important; }
+    #conversationView header { background: var(--dark-page) !important; border-color: var(--dark-raised) !important; }
     #convTitle { color: #f5f5f4 !important; }
     #convModel { color: #a8a29e !important; }
     .time-label { color: #a8a29e !important; }
     .time-value { color: #a8a29e !important; }
-    #conversationView header button:hover { background: #2a2535 !important; }
+    #conversationView header button:hover { background: var(--dark-raised) !important; }
 
     /* Error banner */
     #errorBanner { background: rgba(239,68,68,0.1) !important; color: #fca5a5 !important; }
 
     /* Messages area */
-    #messagesContainer { background: #1e1b28 !important; }
+    #messagesContainer { background: var(--chat-page-dark) !important; }
 
     /* AI messages */
     .ai-msg .message-text { color: #d6d3d1 !important; }
     .ai-msg .message-text strong, .ai-msg .message-text b { color: #f5f5f4 !important; }
     .ai-msg .message-text h1, .ai-msg .message-text h2, .ai-msg .message-text h3,
     .ai-msg .message-text h4, .ai-msg .message-text h5, .ai-msg .message-text h6 { color: #f5f5f4 !important; }
-    .ai-msg .message-text code { background: #2a2535 !important; color: #d6d3d1 !important; }
-    .ai-msg .message-text pre { background: #2a2535 !important; }
-    .ai-msg .message-text blockquote { border-color: #3a3545 !important; color: #a8a29e !important; }
+    .ai-msg .message-text code { background: var(--dark-raised) !important; color: #d6d3d1 !important; }
+    .ai-msg .message-text pre { background: var(--dark-raised) !important; }
+    .ai-msg .message-text blockquote { border-color: var(--dark-border) !important; color: #a8a29e !important; }
 
     /* User bubbles */
-    .user-bubble { background: #3D3A6E !important; }
-    .user-bubble .message-text { color: #e8e5f0 !important; }
+    .user-bubble { background: var(--bubble-dark) !important; }
+    .user-bubble .message-text { color: var(--bubble-text-dark) !important; }
     .user-bubble .message-text strong { color: #fff !important; }
 
     /* Message timestamps */
     .message-time { color: #78716c !important; }
 
     /* Typing indicator */
-    #typingIndicator { background: #2a2535 !important; color: #a8a29e !important; }
+    #typingIndicator { background: var(--dark-raised) !important; color: #a8a29e !important; }
     #typingIndicator .typing-dot { background: #78716c !important; }
 
     /* Turn warning */
     #turnWarningBar { background: rgba(245,158,11,0.1) !important; border-color: rgba(245,158,11,0.2) !important; color: #fcd34d !important; }
 
     /* Input area */
-    #inputArea { background: #1e1b28 !important; }
-    #inputArea > div { background: #221f2e !important; border-color: #3a3545 !important; }
+    #inputArea { background: var(--chat-page-dark) !important; }
+    #inputArea > div { background: var(--dark-card) !important; border-color: var(--dark-border) !important; }
     #messageInput { color: #e7e5e4 !important; }
     #messageInput::placeholder { color: #57534e !important; }
 
     /* Send button stays dark indigo */
-    #sendBtn { background: #4338CA !important; }
-    #sendBtn:hover { background: #4F46E5 !important; }
+    #sendBtn { background: var(--soft-700) !important; }
+    #sendBtn:hover { background: var(--soft-600) !important; }
 
     /* Crisis heart popover */
-    #crisisPopover { background: #221f2e !important; border-color: #3a3545 !important; }
+    #crisisPopover { background: var(--dark-card) !important; border-color: var(--dark-border) !important; }
     #crisisPopover h4 { color: #d6d3d1 !important; }
     #crisisPopover .text-stone-600 { color: #a8a29e !important; }
 
     /* Status area */
-    #statusArea { background: #1c1926 !important; border-color: #2a2535 !important; }
+    #statusArea { background: var(--dark-page) !important; border-color: var(--dark-raised) !important; }
     #statusContent { color: #a8a29e !important; }
 
     /* Input disclaimer */
     #inputArea p { color: #78716c !important; }
 
     /* ── All Reports view ── */
-    #allReportsView { background: #1c1926 !important; }
+    #allReportsView { background: var(--dark-page) !important; }
     #allReportsView .text-stone-900 { color: #f5f5f4 !important; }
 
     /* ── Selection popup (save quote) ── */
-    #selectionPopup { background: #221f2e !important; border-color: #3a3545 !important; }
+    #selectionPopup { background: var(--dark-card) !important; border-color: var(--dark-border) !important; }
 
     /* ── Saved quotes drawer ── */
-    #selectionsSidebar { background: #1c1926 !important; border-color: #2a2535 !important; }
-    #selectionsSidebar .border-stone-100 { border-color: #2a2535 !important; }
+    #selectionsSidebar { background: var(--dark-page) !important; border-color: var(--dark-raised) !important; }
+    #selectionsSidebar .border-stone-100 { border-color: var(--dark-raised) !important; }
     #selectionsSidebar .text-stone-300 { color: #a8a29e !important; }
     #selectionsContent .text-stone-600 { color: #d6d3d1 !important; }
     #selectionsContent .text-stone-700 { color: #d6d3d1 !important; }
     #selectionsContent .text-stone-500 { color: #a8a29e !important; }
     #selectionsContent .text-stone-400 { color: #a8a29e !important; }
     #selectionsContent .text-stone-300 { color: #78716c !important; }
-    #selectionsContent .border-violet-200 { border-color: #5B5FC7 !important; }
-    #selectionsContent .selection-fade { background: linear-gradient(to top, #1c1926, transparent) !important; }
+    #selectionsContent .border-violet-200 { border-color: var(--brand-primary) !important; }
+    #selectionsContent .selection-fade { background: linear-gradient(to top, var(--dark-page), transparent) !important; }
     #selectionsOverlay { background: rgba(0,0,0,0.5) !important; }
 
     /* ── Safety modal ── */
-    #safetyModal .bg-white { background: #221f2e !important; }
+    #safetyModal .bg-white { background: var(--dark-card) !important; }
     #safetyModal .text-stone-700 { color: #d6d3d1 !important; }
     #safetyModal .text-stone-500 { color: #a8a29e !important; }
-    #safetyModal .border-stone-200 { border-color: #2a2535 !important; }
-    #safetyModal .bg-muted { background: #1c1926 !important; }
+    #safetyModal .border-stone-200 { border-color: var(--dark-raised) !important; }
+    #safetyModal .bg-muted { background: var(--dark-page) !important; }
     #safetyModal .bg-amber-50 { background: rgba(245,158,11,0.1) !important; }
     #safetyModal .text-amber-800, #safetyModal .text-amber-900 { color: #fcd34d !important; }
     #safetyModal .bg-red-50 { background: rgba(239,68,68,0.1) !important; }
     #safetyModal .text-red-900 { color: #fca5a5 !important; }
 
     /* Report modal */
-    #reportModal .bg-white { background: #221f2e !important; }
-    #reportModal .border-stone-200 { border-color: #2a2535 !important; }
+    #reportModal .bg-white { background: var(--dark-card) !important; }
+    #reportModal .border-stone-200 { border-color: var(--dark-raised) !important; }
     #reportModal .text-stone-900 { color: #f5f5f4 !important; }
     #reportModal .text-stone-500 { color: #a8a29e !important; }
 
     /* Report content (injected HTML with hardcoded colors) */
     .unified-report { color: #d6d3d1 !important; }
     .unified-report .report-header h2 { color: #f5f5f4 !important; }
-    .unified-report .report-meta { border-color: #2a2535 !important; }
+    .unified-report .report-meta { border-color: var(--dark-raised) !important; }
     .unified-report .meta-label { color: #a8a29e !important; }
     .unified-report .meta-value { color: #f5f5f4 !important; }
     .unified-report .meta-value-models { color: #a8a29e !important; }
@@ -223,9 +227,9 @@
     /* Summary & themes */
     .unified-report .summary-text { color: #d6d3d1 !important; }
     .unified-report .themes-section h4 { color: #f5f5f4 !important; }
-    .unified-report .themes-list-simple li { color: #d6d3d1 !important; border-color: #2a2535 !important; }
+    .unified-report .themes-list-simple li { color: #d6d3d1 !important; border-color: var(--dark-raised) !important; }
     .unified-report .themes-list-simple li::before { color: #78716c !important; }
-    .unified-report .themes-list li { color: #d6d3d1 !important; border-color: #5B5FC7 !important; }
+    .unified-report .themes-list li { color: #d6d3d1 !important; border-color: var(--brand-primary) !important; }
     .unified-report .progress-notes h4 { color: #f5f5f4 !important; }
     .unified-report .progress-notes-text { color: #d6d3d1 !important; }
     .unified-report .generated-by { color: #78716c !important; }
@@ -237,12 +241,12 @@
     /* NLP analysis */
     .unified-report .nlp-title { color: #f5f5f4 !important; }
     .unified-report .sentiment-score { color: #f5f5f4 !important; }
-    .unified-report .progress-bar { background: #2a2535 !important; }
+    .unified-report .progress-bar { background: var(--dark-raised) !important; }
     .unified-report .progress-item span { color: #a8a29e !important; }
     .unified-report .nlp-note { color: #a8a29e !important; }
 
     /* Saved messages */
-    .unified-report .saved-message { border-color: #5B5FC7 !important; }
+    .unified-report .saved-message { border-color: var(--brand-primary) !important; }
     .unified-report .saved-message .message-text { color: #d6d3d1 !important; }
     .unified-report .saved-message .message-note { color: #a8a29e !important; }
     .unified-report .saved-message .message-date { color: #78716c !important; }
@@ -252,17 +256,17 @@
     .unified-report .keyword-value { color: #f5f5f4 !important; }
     .unified-report .word-text { color: #d6d3d1 !important; }
     .unified-report .word-count { color: #a8a29e !important; }
-    .unified-report .top-words-section { border-color: #5B5FC7 !important; }
+    .unified-report .top-words-section { border-color: var(--brand-primary) !important; }
     .unified-report .top-words-section h4 { color: #f5f5f4 !important; }
     .unified-report .graph-caption { color: #a8a29e !important; }
 
     /* Tables & methodology */
-    .unified-report .breakdown-table th { color: #a8a29e !important; border-color: #3a3545 !important; }
-    .unified-report .breakdown-table td { color: #d6d3d1 !important; border-color: #2a2535 !important; }
-    .unified-report .methodology-section { border-color: #2a2535 !important; }
+    .unified-report .breakdown-table th { color: #a8a29e !important; border-color: var(--dark-border) !important; }
+    .unified-report .breakdown-table td { color: #d6d3d1 !important; border-color: var(--dark-raised) !important; }
+    .unified-report .methodology-section { border-color: var(--dark-raised) !important; }
     .unified-report .methodology-intro { color: #a8a29e !important; }
     .unified-report .methodology-list li { color: #d6d3d1 !important; }
-    .unified-report .citations-section { border-color: #2a2535 !important; }
+    .unified-report .citations-section { border-color: var(--dark-raised) !important; }
     .unified-report .citations-list { color: #a8a29e !important; }
 
     /* Misc */
@@ -271,7 +275,7 @@
     .unified-report .error-message p { color: #fcd34d !important; }
 
     /* Text selection highlight */
-    .message-text::selection { background: #6D28D9; color: #f5f5f4; }
+    .message-text::selection { background: var(--soft-700); color: #f5f5f4; }
   }
 </style>
 {% endblock %}
@@ -464,7 +468,7 @@
       <div class="flex flex-1 min-h-0">
         <div class="flex flex-1 flex-col min-w-0">
           {# Messages #}
-          <div id="messagesContainer" class="flex-1 overflow-y-auto px-6 py-4 pb-8 bg-[#F8F6FC]"></div>
+          <div id="messagesContainer" class="flex-1 overflow-y-auto px-6 py-4 pb-8 bg-chat-page"></div>
 
           {# Typing indicator #}
           <div id="typingIndicator" class="hidden items-center gap-2 px-6 py-2.5 bg-violet-50 rounded-lg mx-6 mb-2 text-sm text-stone-600">
@@ -478,7 +482,7 @@
           <div id="turnWarningBar" class="hidden border-t border-amber-200 bg-amber-50 px-6 py-2 text-center text-sm text-amber-800 shrink-0"></div>
 
           {# Input area (shown/hidden by JS based on conversation state) #}
-          <div id="inputArea" class="hidden bg-[#F8F6FC] px-6 py-3 shrink-0">
+          <div id="inputArea" class="hidden bg-chat-page px-6 py-3 shrink-0">
             <div class="flex items-end gap-2 rounded-2xl border border-stone-200 bg-white px-4 py-2">
               <textarea id="messageInput"
                 class="auto-resize flex-1 border-0 bg-transparent py-1.5 text-[15px] font-[inherit] placeholder:text-stone-400 focus:outline-none"
@@ -498,7 +502,7 @@
                 </div>
               </button>
               <button id="sendBtn" onclick="sendMessage()"
-                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#312E81] text-white transition hover:bg-[#3D3A94] disabled:opacity-30 disabled:cursor-not-allowed">
+                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-cloze-action text-white transition hover:bg-cloze-action-hover disabled:opacity-30 disabled:cursor-not-allowed">
                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
               </button>
             </div>

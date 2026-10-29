@@ -104,6 +104,14 @@ def create_app():
     def server_error(e):
         return _rt('500.html'), 500
 
+    # Instance colours as CSS variables (templates/_theme_vars.html).
+    from .theme import css_variables
+    theme_css = css_variables(app.config["CLOZE_THEME"])
+
+    @app.context_processor
+    def inject_theme():
+        return {"theme_css": theme_css}
+
     # Load balancer health check. Skips the database, so a DB blip doesn't restart every task.
     @app.get("/healthz")
     def healthz():

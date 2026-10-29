@@ -49,6 +49,7 @@ locals {
       CLOZE_REPORTS_ENABLED = tostring(var.reports_enabled)
     },
     var.guard_sender_email == "" ? {} : { CLOZE_GUARD_SENDER = var.guard_sender_email },
+    length(var.theme) == 0 ? {} : { CLOZE_THEME = jsonencode(var.theme) },
     var.extra_environment,
   )
 

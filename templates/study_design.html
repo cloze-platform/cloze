@@ -7,16 +7,16 @@
 <style>
   /* Sidebar items — no containers, just text with accent */
   .flow-item { transition: all 0.12s; padding: 0.5rem 0.75rem; border-radius: 0.375rem; cursor: pointer; white-space: nowrap; }
-  .flow-item:hover { color: #4338CA; }
-  .flow-item.active { color: #4338CA; background: rgba(139, 92, 246, 0.06); }
+  .flow-item:hover { color: var(--soft-700); }
+  .flow-item.active { color: var(--soft-700); background: rgb(var(--soft-500-rgb) / 0.06); }
 
   /* Phase accent line */
   .phase-accent { width: 3px; border-radius: 2px; background: #E5E7EB; transition: background 0.2s; flex-shrink: 0; }
-  .phase-group:hover .phase-accent { background: #A78BFA; }
+  .phase-group:hover .phase-accent { background: var(--soft-400); }
 
   /* Chat rows — no container, just content */
   .chat-row { padding: 0.5rem 0; cursor: pointer; transition: color 0.1s; }
-  .chat-row:hover { color: #4338CA; }
+  .chat-row:hover { color: var(--soft-700); }
   .chat-row:hover .chat-meta { opacity: 1; }
   .chat-meta { opacity: 0; transition: opacity 0.15s; }
 
@@ -27,12 +27,12 @@
   /* Inline inputs — borderless, just text */
   .inline-input { border: none; background: transparent; outline: none; width: 100%;
     border-bottom: 1px solid transparent; transition: border-color 0.15s; }
-  .inline-input:focus { border-bottom-color: #A78BFA; }
+  .inline-input:focus { border-bottom-color: var(--soft-400); }
   .inline-input::placeholder { color: #D1D5DB; }
 
   /* Add triggers — minimal */
   .add-trigger { color: #D1D5DB; transition: color 0.15s; cursor: pointer; }
-  .add-trigger:hover { color: #7C3AED; }
+  .add-trigger:hover { color: var(--soft-600); }
 
   /* Hide native number spinners */
   input[type=number]::-webkit-inner-spin-button,
@@ -45,24 +45,24 @@
 
   /* Type picker */
   .type-option { transition: all 0.15s; cursor: pointer; }
-  .type-option:hover { padding-left: 1rem; color: #4338CA; }
-  .type-option:hover .type-dot { background: #7C3AED; }
+  .type-option:hover { padding-left: 1rem; color: var(--soft-700); }
+  .type-option:hover .type-dot { background: var(--soft-600); }
   .type-dot { width: 8px; height: 8px; border-radius: 50%; background: #D1D5DB; transition: background 0.15s; flex-shrink: 0; }
 
   @media (prefers-color-scheme: dark) {
-    .flow-item:hover { color: #c4b5fd; }
-    .flow-item.active { color: #c4b5fd; background: rgba(139,92,246,0.12); }
-    .phase-accent { background: #3a3545; }
-    .phase-group:hover .phase-accent { background: #A78BFA; }
-    .chat-row:hover { color: #c4b5fd; }
+    .flow-item:hover { color: var(--brand-on-dark); }
+    .flow-item.active { color: var(--brand-on-dark); background: rgb(var(--soft-500-rgb) / 0.12); }
+    .phase-accent { background: var(--dark-border); }
+    .phase-group:hover .phase-accent { background: var(--soft-400); }
+    .chat-row:hover { color: var(--brand-on-dark); }
     .inline-input { color: #e7e5e4; }
-    .inline-input:focus { border-bottom-color: #A78BFA; }
+    .inline-input:focus { border-bottom-color: var(--soft-400); }
     .inline-input::placeholder { color: #57534e; }
     .add-trigger { color: #78716c; }
-    .add-trigger:hover { color: #c4b5fd; }
-    .type-option:hover { color: #c4b5fd; }
+    .add-trigger:hover { color: var(--brand-on-dark); }
+    .type-option:hover { color: var(--brand-on-dark); }
     .type-dot { background: #57534e; }
-    .timeline-bar { background: #2a2535; }
+    .timeline-bar { background: var(--dark-raised); }
   }
 </style>
 {% endblock %}

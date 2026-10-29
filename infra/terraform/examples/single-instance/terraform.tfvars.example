@@ -11,3 +11,9 @@ enable_https       = false
 image_tag          = "bootstrap"
 reports_enabled    = true
 guard_sender_email = ""
+
+# Optional instance colours; anything not set keeps the Cloze palette.
+# theme = {
+#   primary = "#1C488F"
+#   hover   = "#223D71"
+# }

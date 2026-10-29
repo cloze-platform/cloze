@@ -6,20 +6,9 @@
   <title>Admin — Cloze</title>
   <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            'cloze-indigo':  '#5B5FC7',
-            'cloze-hover':   '#4E51B0',
-          }
-        }
-      }
-    };
-  </script>
+  {% include "_tailwind_theme.html" %}
 </head>
-<body class="min-h-screen flex items-center justify-center p-4 antialiased" style="background:#1c1926">
+<body class="min-h-screen flex items-center justify-center p-4 antialiased" style="background:var(--dark-page)">
 
   <div class="w-full max-w-sm">
     {# Logo + title #}

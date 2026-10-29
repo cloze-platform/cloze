@@ -1,0 +1,30 @@
+{# Include right after the Tailwind CDN script. #}
+{% include "_theme_vars.html" %}
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          'page':           '#FAF9F7',
+          'surface':        '#FFFFFF',
+          'muted':          '#F5F4F0',
+          'cloze-indigo':   'rgb(var(--brand-primary-rgb) / <alpha-value>)',
+          'cloze-hover':    'rgb(var(--brand-hover-rgb) / <alpha-value>)',
+          'cloze-sky':      'rgb(var(--brand-accent-rgb) / <alpha-value>)',
+          'cloze-lavender': 'rgb(var(--brand-tint-rgb) / <alpha-value>)',
+          'dark-page':      'rgb(var(--dark-page-rgb) / <alpha-value>)',
+          'dark-sidebar':   'rgb(var(--dark-sidebar-rgb) / <alpha-value>)',
+          'chat-page':      'rgb(var(--chat-page-rgb) / <alpha-value>)',
+          'cloze-action':   'rgb(var(--action-rgb) / <alpha-value>)',
+          'cloze-action-hover': 'rgb(var(--action-hover-rgb) / <alpha-value>)',
+          // The templates use violet (and a little indigo and purple) as a soft
+          // brand tint, so a theme repaints those shades too.
+          violet: Object.fromEntries([50, 100, 200, 300, 400, 500, 600, 700]
+            .map(s => [s, 'rgb(var(--soft-' + s + '-rgb) / <alpha-value>)'])),
+          indigo: { 50: 'rgb(var(--soft-50-rgb) / <alpha-value>)', 300: 'rgb(var(--soft-300-rgb) / <alpha-value>)' },
+          purple: { 700: 'rgb(var(--soft-700-rgb) / <alpha-value>)' },
+        }
+      }
+    }
+  };
+</script>

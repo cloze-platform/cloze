@@ -33,9 +33,9 @@
   .message-group:hover .message-time { opacity: 1; }
   .message-time { opacity: 0; transition: opacity 0.15s; }
   .user-msg { display: flex; justify-content: flex-end; }
-  .user-bubble { background: #E9E5F5; border-radius: 1.125rem 1.125rem 0.25rem 1.125rem;
+  .user-bubble { background: var(--bubble); border-radius: 1.125rem 1.125rem 0.25rem 1.125rem;
     padding: 0.875rem 1.125rem; max-width: 75%; }
-  .user-bubble .message-text { color: #2D2A3E; }
+  .user-bubble .message-text { color: var(--bubble-text); }
   .ai-msg { max-width: 90%; }
 
   /* Markdown prose — generous, readable */
@@ -53,7 +53,7 @@
   .message-text blockquote { border-left: 3px solid #D6D3D1; padding-left: 1em; margin: 0.75em 0; color: #78716C; }
   .message-text strong, .message-text b { font-weight: 600; color: #1C1917; }
   .message-text em, .message-text i { font-style: italic; }
-  .message-text::selection { background: #C4B5FD; color: #1C1917; }
+  .message-text::selection { background: var(--soft-300); color: #1C1917; }
 
   /* Saved-item truncation */
   .saved-item-text.truncated {
@@ -68,10 +68,10 @@
 
   /* ── Auto dark mode (follows OS preference) ── */
   @media (prefers-color-scheme: dark) {
-    body { background: #1c1926 !important; color: #d6d3d1 !important; }
+    body { background: var(--dark-page) !important; color: #d6d3d1 !important; }
 
     /* Header */
-    header { background: #1c1926 !important; border-color: #2a2535 !important; }
+    header { background: var(--dark-page) !important; border-color: var(--dark-raised) !important; }
     header h2, #conversationTitle { color: #f5f5f4 !important; }
     header .text-stone-400 { color: #a8a29e !important; }
     header a.text-stone-400:hover { color: #d6d3d1 !important; }
@@ -81,72 +81,72 @@
     #errorBanner { background: rgba(239,68,68,0.1) !important; color: #fca5a5 !important; }
 
     /* Messages area */
-    .bg-\[\#F8F6FC\] { background: #1e1b28 !important; }
+    .bg-chat-page { background: var(--chat-page-dark) !important; }
 
     /* AI messages */
     .ai-msg .message-text { color: #d6d3d1 !important; }
     .ai-msg .message-text strong, .ai-msg .message-text b { color: #f5f5f4 !important; }
     .ai-msg .message-text h1, .ai-msg .message-text h2, .ai-msg .message-text h3,
     .ai-msg .message-text h4, .ai-msg .message-text h5, .ai-msg .message-text h6 { color: #f5f5f4 !important; }
-    .ai-msg .message-text code { background: #2a2535 !important; color: #d6d3d1 !important; }
-    .ai-msg .message-text pre { background: #2a2535 !important; }
-    .ai-msg .message-text blockquote { border-color: #3a3545 !important; color: #a8a29e !important; }
+    .ai-msg .message-text code { background: var(--dark-raised) !important; color: #d6d3d1 !important; }
+    .ai-msg .message-text pre { background: var(--dark-raised) !important; }
+    .ai-msg .message-text blockquote { border-color: var(--dark-border) !important; color: #a8a29e !important; }
 
     /* User bubbles */
-    .user-bubble { background: #3D3A6E !important; }
-    .user-bubble .message-text { color: #e8e5f0 !important; }
+    .user-bubble { background: var(--bubble-dark) !important; }
+    .user-bubble .message-text { color: var(--bubble-text-dark) !important; }
     .user-bubble .message-text strong { color: #fff !important; }
 
     /* Timestamps */
     .message-time { color: #78716c !important; }
 
     /* Typing indicator */
-    #typingIndicator { background: #2a2535 !important; color: #a8a29e !important; }
+    #typingIndicator { background: var(--dark-raised) !important; color: #a8a29e !important; }
     #typingIndicator .typing-dot { background: #78716c !important; }
 
     /* Input area */
-    .border-t.border-stone-200.bg-white { background: #1c1926 !important; border-color: #2a2535 !important; }
-    #messageInput { background: #221f2e !important; border-color: #3a3545 !important; color: #e7e5e4 !important; }
+    .border-t.border-stone-200.bg-white { background: var(--dark-page) !important; border-color: var(--dark-raised) !important; }
+    #messageInput { background: var(--dark-card) !important; border-color: var(--dark-border) !important; color: #e7e5e4 !important; }
     #messageInput::placeholder { color: #57534e !important; }
 
     /* Read-only bar */
-    .bg-violet-50\/40 { background: #2a2535 !important; }
-    .border-t.border-stone-100.bg-stone-50 { background: #1c1926 !important; border-color: #2a2535 !important; }
-    .border-t.border-stone-100 { border-color: #2a2535 !important; }
+    .bg-violet-50\/40 { background: var(--dark-raised) !important; }
+    .border-t.border-stone-100.bg-stone-50 { background: var(--dark-page) !important; border-color: var(--dark-raised) !important; }
+    .border-t.border-stone-100 { border-color: var(--dark-raised) !important; }
     .text-stone-500 { color: #a8a29e !important; }
 
     /* Saved quotes sidebar */
-    #quotesPanel, .border-l.border-stone-100.bg-stone-50 { background: #15121e !important; border-color: #2a2535 !important; }
-    #quotesPanel .border-stone-100 { border-color: #2a2535 !important; }
+    #quotesPanel, .border-l.border-stone-100.bg-stone-50 { background: var(--dark-sidebar) !important; border-color: var(--dark-raised) !important; }
+    #quotesPanel .border-stone-100 { border-color: var(--dark-raised) !important; }
     #quotesPanel .text-stone-300 { color: #78716c !important; }
-    #quotesToggle { background: #15121e !important; border-color: #2a2535 !important; }
+    #quotesToggle { background: var(--dark-sidebar) !important; border-color: var(--dark-raised) !important; }
     #savedSelections .text-stone-600 { color: #d6d3d1 !important; }
     #savedSelections .text-stone-400 { color: #a8a29e !important; }
     #savedSelections .text-stone-300 { color: #78716c !important; }
-    #savedSelections .border-violet-200 { border-color: #5B5FC7 !important; }
+    #savedSelections .border-violet-200 { border-color: var(--brand-primary) !important; }
 
     /* Selection popup */
-    #selectionPopup { background: #221f2e !important; border-color: #3a3545 !important; }
+    #selectionPopup { background: var(--dark-card) !important; border-color: var(--dark-border) !important; }
 
     /* Bottom sheet for quotes */
-    #quotesSheet .bg-white { background: #221f2e !important; }
-    #quotesSheet .bg-stone-300 { background: #3a3545 !important; }
+    #quotesSheet .bg-white { background: var(--dark-card) !important; }
+    #quotesSheet .bg-stone-300 { background: var(--dark-border) !important; }
     #quotesSheet .text-stone-700 { color: #d6d3d1 !important; }
     #quotesSheet .text-stone-400 { color: #a8a29e !important; }
     #quotesSheet .text-stone-300 { color: #78716c !important; }
     #quotesSheetContent .text-stone-600 { color: #d6d3d1 !important; }
-    #quotesSheetContent .border-violet-200 { border-color: #5B5FC7 !important; }
+    #quotesSheetContent .border-violet-200 { border-color: var(--brand-primary) !important; }
 
     /* Report modal */
-    .bg-white.shadow-xl { background: #221f2e !important; }
-    #reportModal .bg-white { background: #221f2e !important; }
-    #reportModal .border-stone-200 { border-color: #2a2535 !important; }
+    .bg-white.shadow-xl { background: var(--dark-card) !important; }
+    #reportModal .bg-white { background: var(--dark-card) !important; }
+    #reportModal .border-stone-200 { border-color: var(--dark-raised) !important; }
     #reportModal .text-stone-900 { color: #f5f5f4 !important; }
 
     /* Report content */
     .unified-report { color: #d6d3d1 !important; }
     .unified-report .report-header h2 { color: #f5f5f4 !important; }
-    .unified-report .report-meta { border-color: #2a2535 !important; }
+    .unified-report .report-meta { border-color: var(--dark-raised) !important; }
     .unified-report .meta-label { color: #a8a29e !important; }
     .unified-report .meta-value { color: #f5f5f4 !important; }
     .unified-report .meta-value-models { color: #a8a29e !important; }
@@ -154,42 +154,42 @@
     .unified-report .component-title { color: #a8a29e !important; }
     .unified-report .summary-text { color: #d6d3d1 !important; }
     .unified-report .themes-section h4 { color: #f5f5f4 !important; }
-    .unified-report .themes-list-simple li { color: #d6d3d1 !important; border-color: #2a2535 !important; }
-    .unified-report .themes-list li { color: #d6d3d1 !important; border-color: #5B5FC7 !important; }
+    .unified-report .themes-list-simple li { color: #d6d3d1 !important; border-color: var(--dark-raised) !important; }
+    .unified-report .themes-list li { color: #d6d3d1 !important; border-color: var(--brand-primary) !important; }
     .unified-report .progress-notes h4 { color: #f5f5f4 !important; }
     .unified-report .progress-notes-text { color: #d6d3d1 !important; }
     .unified-report .stat-value { color: #f5f5f4 !important; }
     .unified-report .stat-label { color: #a8a29e !important; }
     .unified-report .nlp-title { color: #f5f5f4 !important; }
     .unified-report .sentiment-score { color: #f5f5f4 !important; }
-    .unified-report .progress-bar { background: #2a2535 !important; }
+    .unified-report .progress-bar { background: var(--dark-raised) !important; }
     .unified-report .progress-item span { color: #a8a29e !important; }
-    .unified-report .saved-message { border-color: #5B5FC7 !important; }
+    .unified-report .saved-message { border-color: var(--brand-primary) !important; }
     .unified-report .saved-message .message-text { color: #d6d3d1 !important; }
     .unified-report .keyword-label { color: #d6d3d1 !important; }
     .unified-report .keyword-value { color: #f5f5f4 !important; }
     .unified-report .word-text { color: #d6d3d1 !important; }
-    .unified-report .top-words-section { border-color: #5B5FC7 !important; }
+    .unified-report .top-words-section { border-color: var(--brand-primary) !important; }
     .unified-report .top-words-section h4 { color: #f5f5f4 !important; }
-    .unified-report .breakdown-table th { color: #a8a29e !important; border-color: #3a3545 !important; }
-    .unified-report .breakdown-table td { color: #d6d3d1 !important; border-color: #2a2535 !important; }
-    .unified-report .methodology-section { border-color: #2a2535 !important; }
+    .unified-report .breakdown-table th { color: #a8a29e !important; border-color: var(--dark-border) !important; }
+    .unified-report .breakdown-table td { color: #d6d3d1 !important; border-color: var(--dark-raised) !important; }
+    .unified-report .methodology-section { border-color: var(--dark-raised) !important; }
     .unified-report .methodology-list li { color: #d6d3d1 !important; }
-    .unified-report .citations-section { border-color: #2a2535 !important; }
+    .unified-report .citations-section { border-color: var(--dark-raised) !important; }
 
     /* Safety modal */
-    #safetyModal .bg-white { background: #221f2e !important; }
+    #safetyModal .bg-white { background: var(--dark-card) !important; }
     #safetyModal .text-stone-700 { color: #d6d3d1 !important; }
     #safetyModal .text-stone-500 { color: #a8a29e !important; }
-    #safetyModal .border-stone-200 { border-color: #2a2535 !important; }
-    #safetyModal .bg-muted { background: #1c1926 !important; }
+    #safetyModal .border-stone-200 { border-color: var(--dark-raised) !important; }
+    #safetyModal .bg-muted { background: var(--dark-page) !important; }
     #safetyModal .bg-amber-50 { background: rgba(245,158,11,0.1) !important; }
     #safetyModal .text-amber-800, #safetyModal .text-amber-900 { color: #fcd34d !important; }
     #safetyModal .bg-red-50 { background: rgba(239,68,68,0.1) !important; }
     #safetyModal .text-red-900 { color: #fca5a5 !important; }
 
     /* Text selection */
-    .message-text::selection { background: #6D28D9; color: #f5f5f4; }
+    .message-text::selection { background: var(--soft-700); color: #f5f5f4; }
   }
 </style>
 {% endblock %}
@@ -236,9 +236,9 @@
   {# ── Main chat area ── #}
   <div class="flex flex-1 min-h-0 w-full">
     {# Chat column #}
-    <div class="flex flex-1 flex-col bg-[#F8F6FC] min-w-0">
+    <div class="flex flex-1 flex-col bg-chat-page min-w-0">
       {# Messages #}
-      <div id="messagesContainer" class="flex-1 overflow-y-auto py-4 w-full px-6 bg-[#F8F6FC]">
+      <div id="messagesContainer" class="flex-1 overflow-y-auto py-4 w-full px-6 bg-chat-page">
         <!-- Messages will be loaded here -->
       </div>
 

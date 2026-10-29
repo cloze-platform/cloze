@@ -46,6 +46,12 @@ variable "reports_enabled" {
   default     = true
 }
 
+variable "theme" {
+  description = "Instance colours; see theme in modules/cloze/variables.tf."
+  type        = map(string)
+  default     = {}
+}
+
 variable "guard_sender_email" {
   description = "Cloze-Guard From address; leave empty until SES is verified and out of the sandbox."
   type        = string
