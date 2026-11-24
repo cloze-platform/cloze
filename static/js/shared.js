@@ -11,6 +11,31 @@ function escapeHtml(s) {
   });
 }
 
+// Model replies are untrusted: a participant can steer a model into emitting
+// HTML, and providers view the same replies. Render Markdown, then keep only
+// the tags Markdown itself produces. No images (a URL can carry conversation
+// text off-site) and no class or style attributes (Tailwind would let a reply
+// restyle the page). Without marked and DOMPurify (both loaded by
+// _markdown_scripts.html), fall back to escaped plain text, never raw HTML.
+var MARKDOWN_ALLOWED_TAGS = ['p', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'strong', 'em', 'del', 'code', 'pre', 'blockquote', 'ul', 'ol', 'li', 'a',
+  'table', 'thead', 'tbody', 'tr', 'th', 'td'];
+var MARKDOWN_ALLOWED_ATTR = ['href', 'title', 'align', 'start'];
+
+function renderMarkdown(text) {
+  var plain = escapeHtml(text || '').replace(/\n/g, '<br>');
+  if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') return plain;
+  try {
+    return DOMPurify.sanitize(marked.parse(text || ''), {
+      ALLOWED_TAGS: MARKDOWN_ALLOWED_TAGS,
+      ALLOWED_ATTR: MARKDOWN_ALLOWED_ATTR,
+    });
+  } catch (e) {
+    console.error('Markdown rendering failed:', e);
+    return plain;
+  }
+}
+
 function highlight(text, query) {
   if (!text || !query) return escapeHtml(text || '');
   var i = text.toLowerCase().indexOf(query.toLowerCase());

@@ -27,16 +27,22 @@ else:
 def create_app():
     app = Flask(__name__, template_folder="../templates", static_folder="../static")
 
-    # Trust proxy headers (for Cloudflare/reverse proxy HTTPS)
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
-
     # All environment-driven settings; raises ConfigError if production is misconfigured.
     app.config.update(load_config())
+
+    # Trust X-Forwarded-For/-Proto/-Host from the configured number of proxies,
+    # so HTTPS is detected and request.remote_addr is the client, not the proxy.
+    hops = app.config["CLOZE_PROXY_HOPS"]
+    if hops:
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=hops, x_proto=hops, x_host=hops)
+
     app.config.update(
         API_TITLE="My API",
         API_VERSION="v1",
         OPENAPI_VERSION="3.0.3",
-        OPENAPI_URL_PREFIX="/",
+        # API docs (/docs, /openapi.json) for development only: in production
+        # they would list the API to anyone, signed in or not.
+        OPENAPI_URL_PREFIX=None if app.config["PRODUCTION"] else "/",
         OPENAPI_SWAGGER_UI_PATH="/docs",
         OPENAPI_SWAGGER_UI_URL="https://cdn.jsdelivr.net/npm/swagger-ui-dist/"
     )

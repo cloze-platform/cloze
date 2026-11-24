@@ -7,6 +7,7 @@ import os
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
+os.environ.setdefault("CLOZE_PROXY_HOPS", "1")  # one proxy in front, as in production
 
 import pytest
 

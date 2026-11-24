@@ -6,7 +6,7 @@ Extends HTML renderer with PDF-specific optimizations for print layout.
 
 from typing import Dict, Any
 
-from .html_renderer import HTMLRenderer
+from .html_renderer import HTMLRenderer, _e
 from report.styles import get_pdf_styles
 
 
@@ -71,7 +71,7 @@ class PDFRenderer(HTMLRenderer):
         <html>
         <head>
             <meta charset="UTF-8">
-            <title>Report - {report_data.get('window_title', 'Chat Session')}</title>
+            <title>Report - {_e(report_data.get('window_title', 'Chat Session'))}</title>
             <style>{css}</style>
         </head>
         <body>

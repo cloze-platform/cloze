@@ -39,6 +39,15 @@ from report.renderers.html_renderer import HTMLRenderer
 from report.renderers.pdf_renderer import PDFRenderer
 
 
+def _data_urls_only(url, *args, **kwargs):
+    """URL fetcher for report PDFs. Reports embed everything they need as data:
+    URLs, so refuse the rest: text that slipped into a report must never make
+    the server read a local file or request a URL."""
+    if url.startswith("data:"):
+        return weasyprint.default_url_fetcher(url, *args, **kwargs)
+    raise ValueError(f"Report PDFs load no external resources (refused {url[:60]!r})")
+
+
 class UnifiedReportGenerator:
     """Main unified report generator that orchestrates all components."""
 
@@ -245,7 +254,7 @@ class UnifiedReportGenerator:
         html_content = generator.render_pdf(report_data)
 
         # Generate PDF using weasyprint
-        html_doc = weasyprint.HTML(string=html_content)
+        html_doc = weasyprint.HTML(string=html_content, url_fetcher=_data_urls_only)
 
         if filename:
             # Save to specified file
@@ -265,4 +274,4 @@ class UnifiedReportGenerator:
         rt = report_data.get('report_type', 'summary')
         generator = cls(window_id, report_type=rt)
         html_content = generator.render_pdf(report_data)
-        return weasyprint.HTML(string=html_content).write_pdf()
+        return weasyprint.HTML(string=html_content, url_fetcher=_data_urls_only).write_pdf()

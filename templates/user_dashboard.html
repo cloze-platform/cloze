@@ -3,7 +3,7 @@
 {% block title %}Cloze{% endblock %}
 
 {% block head %}
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+{% include "_markdown_scripts.html" %}
 {% endblock %}
 
 {% block styles %}
@@ -1544,9 +1544,7 @@ async function loadConversationView(convId) {
 }
 
 function formatMessageContent(content, role) {
-  if (role === 'assistant') {
-    try { return marked.parse(content); } catch (e) { return escapeHtml(content).replace(/\n/g, '<br>'); }
-  }
+  if (role === 'assistant') return renderMarkdown(content);
   return escapeHtml(content).replace(/\n/g, '<br>');
 }
 
@@ -1700,8 +1698,10 @@ async function checkSafetyAcknowledgment() {
     try {
       var resp = await fetch('/api/safety-disclaimer');
       var data = await resp.json();
-      if (data.custom && data.text) {
-        document.getElementById('safetyModalBody').innerHTML = data.text;
+      // Custom disclaimers can be HTML written by a provider or admin: sanitize it,
+      // and keep the default text if the sanitizer did not load.
+      if (data.custom && data.text && typeof DOMPurify !== 'undefined') {
+        document.getElementById('safetyModalBody').innerHTML = DOMPurify.sanitize(data.text);
       }
     } catch(e) { /* use default content */ }
     // Bind checkbox listener (re-bind in case custom HTML replaced the element)

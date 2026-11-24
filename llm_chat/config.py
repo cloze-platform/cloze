@@ -35,6 +35,20 @@ def _flag(name, default):
     raise ConfigError(f"{name} must be true or false, got {value!r}")
 
 
+def _count(name, default):
+    """Read a whole number that is zero or more; anything else is an error."""
+    value = _env(name)
+    if value is None:
+        return default
+    try:
+        count = int(value)
+    except ValueError:
+        count = -1
+    if count < 0:
+        raise ConfigError(f"{name} must be a whole number (0 or more), got {value!r}")
+    return count
+
+
 def load_config():
     """Build the Flask config dict from the environment.
 
@@ -81,6 +95,11 @@ def load_config():
         "SESSION_COOKIE_SECURE": production,
         "SESSION_COOKIE_HTTPONLY": True,
         "SESSION_COOKIE_SAMESITE": "Lax",
+        # How many reverse proxies sit in front of the app (Cloudflare, a load
+        # balancer, nginx). Their X-Forwarded-* headers are trusted for exactly
+        # that many hops, so the login rate limit sees the real client address.
+        # 0 when clients connect to gunicorn directly.
+        "CLOZE_PROXY_HOPS": _count("CLOZE_PROXY_HOPS", 1),
         # Instance-wide switch for report generation (NLP analysis and AI
         # summaries). When false it overrides every admin and provider setting.
         "CLOZE_REPORTS_ENABLED": _flag("CLOZE_REPORTS_ENABLED", True),

@@ -3,7 +3,7 @@
 {% block title %}Conversation{% endblock %}
 
 {% block head %}
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+{% include "_markdown_scripts.html" %}
 {% endblock %}
 
 {% block styles %}
@@ -622,16 +622,8 @@
   }
 
   function formatMessageContent(content, role) {
-    if (role === 'assistant') {
-      try {
-        return marked.parse(content);
-      } catch (error) {
-        console.error('Markdown parsing error:', error);
-        return escapeHtml(content).replace(/\n/g, '<br>');
-      }
-    } else {
-      return escapeHtml(content).replace(/\n/g, '<br>');
-    }
+    if (role === 'assistant') return renderMarkdown(content);
+    return escapeHtml(content).replace(/\n/g, '<br>');
   }
 
   function handleKeyPress(event) {

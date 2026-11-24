@@ -771,7 +771,7 @@
       }
       html += '<div class="text-sm"><span class="text-stone-500">Status:</span> ' + (data.visible ? '<span class="font-medium text-emerald-600">Active</span>' : '<span class="font-medium text-red-500">Disabled</span>') + '</div>';
       html += '<button onclick="toggleUserVisibility(' + patientId + ', ' + !data.visible + ')" class="rounded-md border border-stone-200 px-3 py-1 text-xs text-stone-600 hover:bg-stone-50">' + (data.visible ? 'Disable Account' : 'Enable Account') + '</button>';
-      html += '<button onclick="showResetPasswordModal(' + patientId + ', \'' + escapeHtml(data.username) + '\')" class="rounded-md border border-stone-200 px-3 py-1 text-xs text-stone-600 hover:bg-stone-50">Reset Password</button>';
+      html += '<button onclick="showResetPasswordModal(' + patientId + ', this.dataset.username)" data-username="' + escapeHtml(data.username) + '" class="rounded-md border border-stone-200 px-3 py-1 text-xs text-stone-600 hover:bg-stone-50">Reset Password</button>';
       html += '</div>';
 
       // Safety plan
@@ -917,7 +917,7 @@
       html += '<div class="text-sm"><span class="text-stone-500">Email:</span> <span class="font-medium">' + escapeHtml(data.email) + '</span></div>';
       html += '<div class="text-sm"><span class="text-stone-500">Status:</span> ' + (data.visible ? '<span class="font-medium text-emerald-600">Active</span>' : '<span class="font-medium text-red-500">Disabled</span>') + '</div>';
       html += '<button onclick="toggleUserVisibility(' + providerId + ', ' + !data.visible + ')" class="rounded-md border border-stone-200 px-3 py-1 text-xs text-stone-600 hover:bg-stone-50">' + (data.visible ? 'Disable Account' : 'Enable Account') + '</button>';
-      html += '<button onclick="showResetPasswordModal(' + providerId + ', \'' + escapeHtml(data.username) + '\')" class="rounded-md border border-stone-200 px-3 py-1 text-xs text-stone-600 hover:bg-stone-50">Reset Password</button>';
+      html += '<button onclick="showResetPasswordModal(' + providerId + ', this.dataset.username)" data-username="' + escapeHtml(data.username) + '" class="rounded-md border border-stone-200 px-3 py-1 text-xs text-stone-600 hover:bg-stone-50">Reset Password</button>';
       html += '</div>';
 
       // Assigned patients
@@ -1583,7 +1583,7 @@
         plan.warning_signs.forEach(function(w) {
           html += '<div class="rounded bg-violet-50/60 px-3 py-2 text-sm">';
           html += '<span class="font-medium">' + escapeHtml(w.sign) + '</span>';
-          if (w.severity) html += ' <span class="text-xs text-stone-500">(severity: ' + w.severity + '/5)</span>';
+          if (w.severity) html += ' <span class="text-xs text-stone-500">(severity: ' + escapeHtml(String(w.severity)) + '/5)</span>';
           if (w.context) html += '<div class="text-xs text-stone-500 mt-0.5">' + escapeHtml(w.context) + '</div>';
           html += '</div>';
         });
@@ -1598,7 +1598,7 @@
           html += '<div class="rounded bg-violet-50/60 px-3 py-2 text-sm">';
           html += '<span class="font-medium">' + escapeHtml(c.strategy) + '</span>';
           if (c.patient_language) html += ' <span class="text-xs text-stone-400">(' + escapeHtml(c.patient_language) + ')</span>';
-          if (c.effectiveness) html += ' <span class="text-xs text-stone-500">effectiveness: ' + c.effectiveness + '/5</span>';
+          if (c.effectiveness) html += ' <span class="text-xs text-stone-500">effectiveness: ' + escapeHtml(String(c.effectiveness)) + '/5</span>';
           html += '</div>';
         });
         html += '</div></div>';
@@ -1640,7 +1640,7 @@
           html += '<div class="rounded px-3 py-2 text-sm ' + (hidden ? 'bg-amber-50 border border-amber-200' : 'bg-violet-50/60') + '">';
           html += '<span class="font-medium">' + escapeHtml(ap.pattern) + '</span>';
           if (hidden) html += ' <span class="text-[10px] font-semibold text-amber-700">HIDDEN FROM PATIENT</span>';
-          html += ' <span class="text-xs text-stone-400">(' + (ap.source || 'provider') + ')</span>';
+          html += ' <span class="text-xs text-stone-400">(' + escapeHtml(String(ap.source || 'provider')) + ')</span>';
           if (ap.reason) html += '<div class="text-xs text-stone-500 mt-0.5">' + escapeHtml(ap.reason) + '</div>';
           html += '</div>';
         });
