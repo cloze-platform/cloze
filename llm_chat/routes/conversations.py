@@ -352,6 +352,13 @@ def send_message(conversation_id):
 
     data = request.json or {}
 
+    # The model sees the latest 20 messages, read before the new one is saved
+    # so it isn't sent twice, then the new message.
+    recent = (conversation.messages.order_by(None)
+              .order_by(Message.timestamp.desc(), Message.id.desc()).limit(20).all())
+    history = [{'role': m.role, 'content': m.content} for m in reversed(recent)]
+    history.append({'role': 'user', 'content': data['message']})
+
     # Save user message
     user_message = Message(
         conversation_id=conversation_id,
@@ -372,11 +379,6 @@ def send_message(conversation_id):
     # Generate title if first message
     if conversation.messages.count() == 0:
         conversation.generate_title()
-
-    # History (last 20)
-    history = [{'role': m.role, 'content': m.content}
-               for m in conversation.messages.order_by(Message.timestamp).limit(20)]
-    history.append({'role': 'user', 'content': data['message']})
 
     system_prompt = conversation.system_prompt_content
 
