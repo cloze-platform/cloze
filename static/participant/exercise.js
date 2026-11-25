@@ -1,0 +1,83 @@
+// The exercise page: Markdown replies, the Before you start step, and the
+// window closing while the page is open. Sending lives in chat.js.
+(function () {
+  // Model replies arrive as plain text from the server and are rendered here,
+  // through renderMarkdown (static/js/shared.js): Markdown, then DOMPurify
+  // with the same allowlist as today's page. Without it they stay plain text.
+  function renderReplies(root) {
+    (root || document).querySelectorAll("[data-md]:not([data-md-done])").forEach(function (el) {
+      if (typeof renderMarkdown !== "function") return;
+      el.innerHTML = renderMarkdown(el.textContent);
+      el.setAttribute("data-md-done", "");
+    });
+  }
+  window.ParticipantExercise = { renderReplies: renderReplies };
+  renderReplies();
+
+  // Start at the latest message.
+  if (document.querySelector("[data-message-id]")) {
+    window.scrollTo(0, document.body.scrollHeight);
+  }
+
+  // ── Before you start ──
+  var form = document.getElementById("agree-form");
+  if (form) {
+    var check = document.getElementById("agree-check");
+    var button = document.getElementById("agree-button");
+    var hint = document.getElementById("agree-hint");
+    var error = document.getElementById("agree-error");
+
+    // A study's own text written as HTML: shown only once DOMPurify has
+    // cleaned it, as today. Otherwise the built-in text stays.
+    var text = document.getElementById("safety-text");
+    if (text && text.dataset.customHtml && typeof DOMPurify !== "undefined") {
+      text.innerHTML = DOMPurify.sanitize(text.dataset.customHtml);
+      // An old custom text may carry its own checkbox; the form below has one.
+      text.querySelectorAll("input").forEach(function (input) { input.remove(); });
+    }
+
+    check.addEventListener("change", function () {
+      button.disabled = !check.checked;
+      hint.hidden = check.checked;
+    });
+
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      if (!check.checked) return;
+      button.disabled = true;
+      error.classList.add("hidden");
+      try {
+        var id = form.dataset.conversationId;
+        if (!id) {
+          var started = await postJSON("/api/windows/start_conversation", { template_id: Number(form.dataset.templateId) });
+          id = started.conversation_id;
+        }
+        await postJSON("/api/conversation/" + id + "/consent", {});
+        window.location.assign("/exercise/" + id);
+      } catch (e) {
+        error.textContent = e.message || "Something went wrong. Please try again.";
+        error.classList.remove("hidden");
+        button.disabled = false;
+      }
+    });
+  }
+
+  async function postJSON(url, body) {
+    var response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    var data = await response.json().catch(function () { return {}; });
+    if (!response.ok) throw new Error(data.error || "Something went wrong. Please try again.");
+    return data;
+  }
+
+  // ── The window closing while the page is open: reload, and the server
+  // shows the exercise as finished. ──
+  var closes = document.querySelector("[data-closes-at]");
+  if (closes) {
+    var wait = Number(closes.getAttribute("data-closes-at")) * 1000 - Date.now();
+    if (wait > 0 && wait < 2147483647) setTimeout(function () { window.location.reload(); }, wait + 1500);
+  }
+})();

@@ -46,13 +46,19 @@ def resolve_greeting(conversation):
     """{'text', 'image_url', 'alt'} for a conversation. Each part comes from the
     chat's override, else the researcher's default; the text finally falls back
     to a built-in line, and the image to none (the page shows a default icon)."""
-    template = db.session.get(ChatTemplate, conversation.template_id) if conversation.template_id else None
+    return greeting_for(conversation.template_id, conversation.user)
+
+
+def greeting_for(template_id, participant):
+    """The greeting for a participant's chat template, before or after its
+    conversation exists. See resolve_greeting."""
+    template = db.session.get(ChatTemplate, template_id) if template_id else None
     chat = template.flow_chat if template else None
 
     # The participant's current researcher decides, the same rule as for
     # loading media (access.can_view), not whoever created the chat. A chat
     # from another researcher's study (a reassigned participant) is ignored.
-    provider_id = get_provider_id_for_patient(conversation.user_id)
+    provider_id = get_provider_id_for_patient(participant.id)
     flags = ProviderFeatureFlags.query.filter_by(provider_id=provider_id).first() if provider_id else None
     if chat is not None and chat.phase.flow.provider_id != provider_id:
         chat = None
@@ -60,7 +66,7 @@ def resolve_greeting(conversation):
     text = (chat and chat.greeting_text) or (flags and flags.greeting_text) or DEFAULT_GREETING_TEXT
     # Only offer an image the participant will actually be allowed to load.
     candidates = [chat and chat.greeting_asset, flags and flags.greeting_asset]
-    asset = next((a for a in candidates if a and access.can_view(conversation.user, a)), None)
+    asset = next((a for a in candidates if a and access.can_view(participant, a)), None)
     return {
         'text': text,
         'image_url': asset.url if asset else None,
