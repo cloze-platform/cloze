@@ -6,6 +6,7 @@ from ..extensions import db
 from ..models import Report, ChatWindow
 from ..services.report_utils import generate_report_for_window, finalize_expired_windows
 from ..utils.settings_resolution import get_effective_setting
+from ..services.participant_nav import participant_reports_query
 from report.generator import UnifiedReportGenerator
 
 reports_bp = Blueprint("reports", __name__, url_prefix="/api/reports")
@@ -28,11 +29,7 @@ def get_reports():
     summary_filter = Report.report_type.in_(['summary', 'default'])
 
     if current_user.is_patient():
-        reports = Report.query.join(ChatWindow).filter(
-            Report.patient_id == current_user.id,
-            ChatWindow.visible == True,
-            summary_filter
-        ).order_by(Report.generated_at.desc()).all()
+        reports = participant_reports_query(current_user.id).all()
     elif current_user.is_provider():
         reports = Report.query.join(ChatWindow).filter(
             Report.provider_id == current_user.id,

@@ -72,3 +72,54 @@ def test_chat_and_action_colours_follow_a_custom_theme():
     assert derived["action"] == "#223D71" and derived["action-hover"] == "#1C488F"
     assert derived["chat-page-dark"] == "#161B24"
     assert derived["bubble"] != DERIVED_DEFAULTS["bubble"]
+
+
+# ── Participant tokens (templates/participant/_tokens.html) ─────────────────
+
+from llm_chat.theme import contrast, participant_css, participant_tokens  # noqa: E402
+
+# (text, background) token pairs the participant designs put together. Each
+# must reach WCAG AA (4.5:1) in light and dark mode, for the Cloze palette and
+# for a custom deployment palette.
+_READABLE_PAIRS = [
+    ("ink", "page"), ("ink", "surface"), ("ink", "quiet"), ("ink", "menu"), ("ink", "accent-soft"),
+    ("ink-3", "page"), ("ink-3", "quiet"),
+    ("hint", "page"), ("hint", "surface"), ("hint", "quiet"), ("hint", "menu"),
+    ("accent-ink", "page"), ("accent-ink", "accent-soft"),
+    ("on-accent", "accent"),
+    ("done", "page"), ("done", "done-soft"),
+    ("waiting", "waiting-soft"),
+    ("help", "help-soft"), ("help", "page"),
+]
+
+
+@pytest.mark.parametrize("raw", [None, BIDMC], ids=["cloze", "bidmc"])
+@pytest.mark.parametrize("mode", [0, 1], ids=["light", "dark"])
+@pytest.mark.parametrize("fg, bg", _READABLE_PAIRS)
+def test_participant_text_colours_are_readable(raw, mode, fg, bg):
+    tokens = participant_tokens(load_theme(raw))[mode]
+    assert contrast(tokens[fg], tokens[bg]) >= 4.5, f"{fg} on {bg}: {contrast(tokens[fg], tokens[bg]):.2f}"
+
+
+def test_contrast_matches_known_values():
+    assert round(contrast("#000000", "#FFFFFF"), 1) == 21.0
+    assert contrast("#777777", "#777777") == 1
+
+
+def test_participant_tokens_follow_the_instance_palette():
+    light, dark = participant_tokens(load_theme(BIDMC))
+    assert light["accent"] == dark["accent"] == "#1C488F"
+    assert dark["page"] == "#161B24"  # the instance's dark_page
+    assert light["accent-soft"] != participant_tokens(load_theme(None))[0]["accent-soft"]
+
+
+def test_a_light_primary_gets_dark_text_on_buttons():
+    light, _ = participant_tokens(load_theme('{"primary": "#F4D35E"}'))
+    assert light["on-accent"] == "#18181F"
+
+
+def test_participant_css_has_light_and_dark_sets():
+    css = participant_css(load_theme(None))
+    assert css.startswith(":root { --p-accent: #5B5FC7;")
+    assert "@media (prefers-color-scheme: dark) { :root {" in css
+    assert css.count("--p-page:") == 2

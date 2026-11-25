@@ -6,13 +6,16 @@ from flask_login import login_required, current_user
 from ..extensions import db
 from ..models import (
     User, ProviderPatient, ProviderSettings, SystemPrompt,
-    Conversation, Model, Message, SavedSelection, ChatWindow, ChatTemplate
+    Conversation, Model, Message, SavedSelection, ChatWindow
 )
 from ..services.llm_interface import LLMInterface
 from ..models import ProviderFeatureFlags
 from ..utils.settings_resolution import get_effective_setting, get_provider_id_for_patient
 from ..utils.access_hours import within_access_window
 from ..services.greeting import resolve_greeting
+from ..services import participant_nav
+from ..utils.participant_ui import uses_v2
+from .participant import render_home as render_participant_home
 
 conv_bp = Blueprint("conversations", __name__, url_prefix="")
 
@@ -25,7 +28,9 @@ def user_dashboard():
         return render_template("admin_dashboard.html")
     elif current_user.is_provider():
         return render_template("provider_dashboard.html")
-    # For patients, show the new chat windows interface
+    # Participants: the redesigned pages when the instance has switched to them.
+    if uses_v2():
+        return render_participant_home()
     return render_template("user_dashboard.html")
 
 @conv_bp.route("/chat-windows")
@@ -79,27 +84,7 @@ def get_access_window():
     """Current participant's access-hours status — drives the 'snoozing' takeover."""
     if not current_user.is_patient():
         return jsonify({'enabled': False})
-
-    provider_id = get_provider_id_for_patient(current_user.id)
-    if not get_effective_setting('access_hours_enabled', provider_id, False):
-        return jsonify({'enabled': False})
-
-    start = get_effective_setting('access_hours_start', provider_id)
-    end = get_effective_setting('access_hours_end', provider_id)
-    if not start or not end:
-        return jsonify({'enabled': False})
-
-    tz = get_effective_setting('access_hours_timezone', provider_id, 'America/New_York')
-    days_raw = get_effective_setting('access_hours_days', provider_id)
-    try:
-        days = json.loads(days_raw) if days_raw else None
-    except (TypeError, ValueError):
-        days = None
-
-    from ..utils.access_hours import window_status
-    status = window_status(start, end, tz, days)
-    status['enabled'] = True
-    return jsonify(status)
+    return jsonify(participant_nav.opening_hours(get_provider_id_for_patient(current_user.id)))
 
 
 @conv_bp.route("/conversation/<int:conversation_id>")
@@ -209,43 +194,15 @@ def mark_consent_provided(conversation_id):
 @conv_bp.route("/api/conversations")
 @login_required
 def get_conversations():
-    conversations = current_user.conversations.order_by(Conversation.updated_at.desc()).all()
-
+    """The user's conversations, newest first, then a placeholder for each
+    template not started yet in an open or upcoming window. What counts as
+    visible is decided in services/participant_nav.py."""
+    nav = participant_nav.build(current_user)
     payload = []
-    now = time.time()
-    started_template_ids = set()
 
-    for c in conversations:
+    for chat in nav.chats:
+        c, window, status = chat.conversation, chat.window, chat.status
         msgs = c.messages.order_by(Message.timestamp).all()
-
-        if c.template_id:
-            started_template_ids.add(c.template_id)
-
-        window_end_date = None
-        window_start_date = None
-        window_title = None
-        window_description = None
-        window_status = None
-        is_upcoming = False
-        is_active = c.visible
-
-        if c.window_id:
-            window = db.session.get(ChatWindow, c.window_id)
-            if window:
-                # Skip conversations in hidden windows
-                if not window.visible:
-                    continue
-                window_end_date = window.end_date
-                window_start_date = window.start_date
-                window_title = window.title
-                window_description = window.description
-                window_status = window.compute_status(now)
-                is_upcoming = window_status == 'scheduled'
-                is_active = window_status == 'active'
-
-        if len(msgs) == 0 and not c.visible:
-            continue
-
         payload.append({
             'id': c.id,
             'title': c.title or 'Untitled Conversation',
@@ -255,40 +212,26 @@ def get_conversations():
             'message_count': len(msgs),
             'messages': [m.to_dict() for m in msgs],
             'visible': c.visible,
-            'is_active': is_active,
-            'is_upcoming': is_upcoming,
+            'is_active': status == 'active' if window else c.visible,
+            'is_upcoming': status == 'scheduled' if window else False,
             'window_id': c.window_id,
-            'window_status': window_status,
-            'window_end_date': window_end_date,
-            'window_start_date': window_start_date,
-            'window_title': window_title,
-            'window_description': window_description,
+            'window_status': status,
+            'window_end_date': window.end_date if window else None,
+            'window_start_date': window.start_date if window else None,
+            'window_title': window.title if window else None,
+            'window_description': window.description if window else None,
             'template_id': c.template_id
         })
 
-    windows = [
-        w for w in ChatWindow.query.filter_by(
-            patient_id=current_user.id,
-            visible=True
-        ).all()
-        if w.compute_status(now) in ('scheduled', 'active')
-    ]
-
-    for window in windows:
-        window_status = window.compute_status(now)
-        is_upcoming = window_status == 'scheduled'
-        is_current = window_status == 'active'
-
-        templates = ChatTemplate.query.filter_by(
-            window_id=window.id,
-            visible=True
-        ).order_by(ChatTemplate.order_index).all()
-
-        for template in templates:
-            if template.id in started_template_ids:
+    for group in nav.groups:
+        if not (group.is_open or group.is_upcoming):
+            continue
+        window = group.window
+        for exercise in group.exercises:
+            if exercise.conversation is not None:
                 continue
-
-            title_suffix = " (Not Started)" if is_current else " (Scheduled)"
+            template = exercise.template
+            title_suffix = " (Not Started)" if group.is_open else " (Scheduled)"
             payload.append({
                 'id': None,
                 'title': f"{template.title}{title_suffix}",
@@ -298,9 +241,9 @@ def get_conversations():
                 'message_count': 0,
                 'messages': [],
                 'visible': True,
-                'is_active': is_current,
-                'is_upcoming': is_upcoming,
-                'window_status': window_status,
+                'is_active': group.is_open,
+                'is_upcoming': group.is_upcoming,
+                'window_status': group.status,
                 'window_start_date': window.start_date,
                 'window_end_date': window.end_date,
                 'window_title': window.title,

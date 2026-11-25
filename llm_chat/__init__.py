@@ -13,6 +13,7 @@ from .routes.chat_windows import window_bp
 from .routes.reports import reports_bp
 from .routes.safety_plan import safety_bp
 from .routes.media import media_bp
+from .routes.participant import participant_bp
 from flask_smorest import Api
 
 # Load variables from .env - use explicit path to ensure it's found
@@ -107,6 +108,7 @@ def create_app():
     app.register_blueprint(reports_bp)
     app.register_blueprint(safety_bp)
     app.register_blueprint(media_bp)
+    app.register_blueprint(participant_bp)
 
     # Error pages
     from flask import render_template as _rt
@@ -123,13 +125,18 @@ def create_app():
     def server_error(e):
         return _rt('500.html'), 500
 
-    # Instance colours as CSS variables (templates/_theme_vars.html).
-    from .theme import css_variables
+    # Instance colours as CSS variables (templates/_theme_vars.html), plus the
+    # participant pages' tokens built from them (templates/participant/_tokens.html).
+    from .theme import css_variables, participant_css
     theme_css = css_variables(app.config["CLOZE_THEME"])
+    participant_theme_css = participant_css(app.config["CLOZE_THEME"])
 
     @app.context_processor
     def inject_theme():
-        return {"theme_css": theme_css}
+        return {"theme_css": theme_css, "participant_css": participant_theme_css}
+
+    from .utils.icons import icon, status_icon
+    app.jinja_env.globals.update(icon=icon, status_icon=status_icon)
 
     # Load balancer health check. Skips the database, so a DB blip doesn't restart every task.
     @app.get("/healthz")

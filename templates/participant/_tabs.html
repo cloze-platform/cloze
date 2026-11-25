@@ -1,0 +1,18 @@
+{# Phone: tabs at the bottom. Sticky, so it comes after the page in the
+   document and stays on screen as the page scrolls. #}
+{% macro tab(href, name, label, symbol, current) %}
+  {% set on = current == name %}
+  <a href="{{ href }}" {% if on %}aria-current="page"{% endif %}
+     class="flex flex-1 flex-col items-center justify-center gap-[3px] text-xs no-underline {{ 'font-semibold text-p-accent-ink' if on else 'font-medium text-p-ink-3' }}">
+    <span aria-hidden="true" class="flex h-[30px] w-14 items-center justify-center rounded-full {{ 'bg-p-accent-soft' if on }}">{{ icon(symbol, 20) }}</span>
+    {{ label }}
+  </a>
+{% endmacro %}
+
+<nav aria-label="Main" class="sticky bottom-0 z-30 flex shrink-0 border-t border-p-line bg-p-page px-1.5 pb-[max(10px,env(safe-area-inset-bottom))] pt-1.5 lg:hidden">
+  {{ tab("/dashboard", "home", "Home", "home", current) }}
+  {% if nav.can_save %}{{ tab(url_for("participant.notebook"), "notebook", "Notebook", "notebook", current) }}{% endif %}
+  {% if nav.safety_plan.state != "off" %}{{ tab(url_for("participant.safety_plan"), "safety_plan", "Safety plan", "shield", current) }}{% endif %}
+  {% if nav.reports_enabled %}{{ tab(url_for("participant.reports"), "reports", "Reports", "report", current) }}{% endif %}
+  {{ tab(url_for("participant.exercises"), "exercises", "Exercises", "chat", current) }}
+</nav>

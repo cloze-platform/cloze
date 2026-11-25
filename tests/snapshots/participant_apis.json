@@ -1,0 +1,381 @@
+{
+ "conversations": [
+  {
+   "created_at": 1799995800.0,
+   "id": 1,
+   "is_active": true,
+   "is_upcoming": false,
+   "message_count": 4,
+   "messages": [
+    {
+     "content": "message 0",
+     "id": 1,
+     "role": "user",
+     "timestamp": 1799995900.0
+    },
+    {
+     "content": "message 1",
+     "id": 2,
+     "role": "assistant",
+     "timestamp": 1799995901.0
+    },
+    {
+     "content": "message 2",
+     "id": 3,
+     "role": "user",
+     "timestamp": 1799995902.0
+    },
+    {
+     "content": "message 3",
+     "id": 4,
+     "role": "assistant",
+     "timestamp": 1799995903.0
+    }
+   ],
+   "model": "test-model",
+   "template_id": 1,
+   "title": "Thought records",
+   "updated_at": 1799996400.0,
+   "visible": true,
+   "window_description": "About Week 1",
+   "window_end_date": 1800432000.0,
+   "window_id": 1,
+   "window_start_date": 1799827200.0,
+   "window_status": "active",
+   "window_title": "Week 1"
+  },
+  {
+   "created_at": 1799826600.0,
+   "id": 3,
+   "is_active": true,
+   "is_upcoming": false,
+   "message_count": 0,
+   "messages": [],
+   "model": "test-model",
+   "template_id": 8,
+   "title": "Star",
+   "updated_at": 1799827200.0,
+   "visible": true,
+   "window_description": "About Characters",
+   "window_end_date": 1825920000.0,
+   "window_id": 4,
+   "window_start_date": 1797408000.0,
+   "window_status": "active",
+   "window_title": "Characters"
+  },
+  {
+   "created_at": 1799653800.0,
+   "id": 2,
+   "is_active": false,
+   "is_upcoming": false,
+   "message_count": 2,
+   "messages": [
+    {
+     "content": "message 0",
+     "id": 5,
+     "role": "user",
+     "timestamp": 1799653900.0
+    },
+    {
+     "content": "message 1",
+     "id": 6,
+     "role": "assistant",
+     "timestamp": 1799653901.0
+    }
+   ],
+   "model": "test-model",
+   "template_id": 5,
+   "title": "Welcome",
+   "updated_at": 1799654400.0,
+   "visible": true,
+   "window_description": "About Intro",
+   "window_end_date": 1799740800.0,
+   "window_id": 3,
+   "window_start_date": 1799136000.0,
+   "window_status": "generating_report",
+   "window_title": "Intro"
+  },
+  {
+   "created_at": 1798271400.0,
+   "id": 6,
+   "is_active": true,
+   "is_upcoming": false,
+   "message_count": 2,
+   "messages": [
+    {
+     "content": "message 0",
+     "id": 11,
+     "role": "user",
+     "timestamp": 1798271500.0
+    },
+    {
+     "content": "message 1",
+     "id": 12,
+     "role": "assistant",
+     "timestamp": 1798271501.0
+    }
+   ],
+   "model": "test-model",
+   "template_id": null,
+   "title": "Old free chat",
+   "updated_at": 1798272000.0,
+   "visible": true,
+   "window_description": null,
+   "window_end_date": null,
+   "window_id": null,
+   "window_start_date": null,
+   "window_status": null,
+   "window_title": null
+  },
+  {
+   "created_at": 1798098600.0,
+   "id": 8,
+   "is_active": false,
+   "is_upcoming": false,
+   "message_count": 2,
+   "messages": [
+    {
+     "content": "message 0",
+     "id": 13,
+     "role": "user",
+     "timestamp": 1798098700.0
+    },
+    {
+     "content": "message 1",
+     "id": 14,
+     "role": "assistant",
+     "timestamp": 1798098701.0
+    }
+   ],
+   "model": "test-model",
+   "template_id": null,
+   "title": "Hidden chat with messages",
+   "updated_at": 1798099200.0,
+   "visible": false,
+   "window_description": null,
+   "window_end_date": null,
+   "window_id": null,
+   "window_start_date": null,
+   "window_status": null,
+   "window_title": null
+  },
+  {
+   "created_at": 1795679400.0,
+   "id": 4,
+   "is_active": false,
+   "is_upcoming": false,
+   "message_count": 2,
+   "messages": [
+    {
+     "content": "message 0",
+     "id": 7,
+     "role": "user",
+     "timestamp": 1795679500.0
+    },
+    {
+     "content": "message 1",
+     "id": 8,
+     "role": "assistant",
+     "timestamp": 1795679501.0
+    }
+   ],
+   "model": "test-model",
+   "template_id": 9,
+   "title": "Pilot chat",
+   "updated_at": 1795680000.0,
+   "visible": true,
+   "window_description": "About Pilot",
+   "window_end_date": 1795680000.0,
+   "window_id": 5,
+   "window_start_date": 1794816000.0,
+   "window_status": "report_ready",
+   "window_title": "Pilot"
+  },
+  {
+   "created_at": 1796544000.0,
+   "id": null,
+   "is_active": true,
+   "is_placeholder": true,
+   "is_upcoming": false,
+   "message_count": 0,
+   "messages": [],
+   "model": "test-model",
+   "template_id": 2,
+   "title": "Check-in (Not Started)",
+   "updated_at": 1796544000.0,
+   "visible": true,
+   "window_description": "About Week 1",
+   "window_end_date": 1800432000.0,
+   "window_id": 1,
+   "window_start_date": 1799827200.0,
+   "window_status": "active",
+   "window_title": "Week 1"
+  },
+  {
+   "created_at": 1796544000.0,
+   "id": null,
+   "is_active": false,
+   "is_placeholder": true,
+   "is_upcoming": true,
+   "message_count": 0,
+   "messages": [],
+   "model": "test-model",
+   "template_id": 4,
+   "title": "Behavioural activation (Scheduled)",
+   "updated_at": 1796544000.0,
+   "visible": true,
+   "window_description": "About Week 2",
+   "window_end_date": 1801036800.0,
+   "window_id": 2,
+   "window_start_date": 1800432000.0,
+   "window_status": "scheduled",
+   "window_title": "Week 2"
+  },
+  {
+   "created_at": 1796544000.0,
+   "id": null,
+   "is_active": true,
+   "is_placeholder": true,
+   "is_upcoming": false,
+   "message_count": 0,
+   "messages": [],
+   "model": "test-model",
+   "template_id": 7,
+   "title": "Sky (Not Started)",
+   "updated_at": 1796544000.0,
+   "visible": true,
+   "window_description": "About Characters",
+   "window_end_date": 1825920000.0,
+   "window_id": 4,
+   "window_start_date": 1797408000.0,
+   "window_status": "active",
+   "window_title": "Characters"
+  }
+ ],
+ "windows_current": [
+  {
+   "created_at": 1796544000.0,
+   "description": "About Week 1",
+   "end_date": 1800432000.0,
+   "id": 1,
+   "is_current": true,
+   "is_upcoming": false,
+   "patient_id": 2,
+   "provider_id": 1,
+   "report_config": {
+    "features": {
+     "ai_summary": true,
+     "cooccurrence_analysis": true,
+     "descriptive_stats": true,
+     "keyword_analysis": true,
+     "saved_messages": true,
+     "sentiment_analysis": true,
+     "voice_analysis": true
+    },
+    "report_type": "summary",
+    "version": 2
+   },
+   "start_date": 1799827200.0,
+   "status": "active",
+   "templates": [
+    {
+     "conversation_id": 1,
+     "created_at": 1796544000.0,
+     "custom_system_prompt": null,
+     "has_conversation": true,
+     "id": 1,
+     "max_messages": null,
+     "model": "test-model",
+     "model_id": 1,
+     "order_index": 0,
+     "purpose": "Purpose of Thought records",
+     "system_prompt_id": null,
+     "title": "Thought records",
+     "visible": true,
+     "window_id": 1
+    },
+    {
+     "conversation_id": null,
+     "created_at": 1796544000.0,
+     "custom_system_prompt": null,
+     "has_conversation": false,
+     "id": 2,
+     "max_messages": null,
+     "model": "test-model",
+     "model_id": 1,
+     "order_index": 1,
+     "purpose": "Purpose of Check-in",
+     "system_prompt_id": null,
+     "title": "Check-in",
+     "visible": true,
+     "window_id": 1
+    }
+   ],
+   "title": "Week 1",
+   "updated_at": null,
+   "visible": true
+  },
+  {
+   "created_at": 1796544000.0,
+   "description": "About Characters",
+   "end_date": 1825920000.0,
+   "id": 4,
+   "is_current": true,
+   "is_upcoming": false,
+   "patient_id": 2,
+   "provider_id": 1,
+   "report_config": {
+    "features": {
+     "ai_summary": true,
+     "cooccurrence_analysis": true,
+     "descriptive_stats": true,
+     "keyword_analysis": true,
+     "saved_messages": true,
+     "sentiment_analysis": true,
+     "voice_analysis": true
+    },
+    "report_type": "summary",
+    "version": 2
+   },
+   "start_date": 1797408000.0,
+   "status": "active",
+   "templates": [
+    {
+     "conversation_id": null,
+     "created_at": 1796544000.0,
+     "custom_system_prompt": null,
+     "has_conversation": false,
+     "id": 7,
+     "max_messages": null,
+     "model": "test-model",
+     "model_id": 1,
+     "order_index": 0,
+     "purpose": "Purpose of Sky",
+     "system_prompt_id": null,
+     "title": "Sky",
+     "visible": true,
+     "window_id": 4
+    },
+    {
+     "conversation_id": 3,
+     "created_at": 1796544000.0,
+     "custom_system_prompt": null,
+     "has_conversation": true,
+     "id": 8,
+     "max_messages": null,
+     "model": "test-model",
+     "model_id": 1,
+     "order_index": 1,
+     "purpose": "Purpose of Star",
+     "system_prompt_id": null,
+     "title": "Star",
+     "visible": true,
+     "window_id": 4
+    }
+   ],
+   "title": "Characters",
+   "updated_at": null,
+   "visible": true
+  }
+ ]
+}
