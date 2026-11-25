@@ -58,8 +58,16 @@ def create_app():
         if request.method in ('POST', 'PUT', 'DELETE', 'PATCH'):
             # Skip for non-API routes (form-based pages) and logout
             if request.path.startswith('/api/'):
-                content_type = request.content_type or ''
-                if 'application/json' not in content_type and 'multipart/form-data' not in content_type:
+                # The media type alone, lowercased: matching substrings of the
+                # raw header let "MULTIPART/FORM-DATA; x=application/json" through.
+                mimetype = request.mimetype
+                if mimetype == 'multipart/form-data':
+                    # Unlike JSON, another site can submit a multipart form
+                    # without a CORS preflight, so these requests must also
+                    # carry a header that only our own pages' fetch() calls add.
+                    if request.headers.get('X-Requested-With') != 'fetch':
+                        abort(415)
+                elif mimetype != 'application/json':
                     abort(415)
 
     # Security headers
