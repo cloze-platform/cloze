@@ -17,12 +17,12 @@ from zoneinfo import ZoneInfo
 from flask import Blueprint, abort, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from ..models import Message
+from ..models import Message, SafetyPlan
 from ..services import participant_nav
 from ..services.greeting import greeting_for
 from ..services.safety_info import DEFAULT_AGREEMENT, bold, safety_info
 from ..utils.participant_ui import uses_v2
-from ..utils.settings_resolution import get_provider_id_for_patient
+from ..utils.settings_resolution import get_effective_setting, get_provider_id_for_patient
 
 participant_bp = Blueprint("participant", __name__, url_prefix="")
 
@@ -164,7 +164,39 @@ def notebook():
 @participant_bp.route("/safety-plan")
 @participant_page
 def safety_plan():
-    return render_page("participant/placeholder.html", current="safety_plan", heading="Safety plan")
+    """The participant's safety plan: their parts to add or change, and the
+    care team's parts to read. Saving goes through today's
+    /api/safety-plan/ endpoints (static/participant/safety-plan.js)."""
+    nav = participant_nav.build(current_user)
+    # One of each status; the oldest wins, as in /api/safety-plan/.
+    plans = {p.status: p for p in SafetyPlan.query.filter(
+        SafetyPlan.patient_id == current_user.id,
+        SafetyPlan.status.in_(("active", "pending_review", "draft"))).order_by(SafetyPlan.id.desc())}
+    active, pending, draft = plans.get("active"), plans.get("pending_review"), plans.get("draft")
+    state = nav.safety_plan.state
+    # What the page shows read-only, and what the form starts from.
+    shown = {"approved": active, "change_waiting": active, "waiting": pending}.get(state)
+    editing = {"your_turn": draft, "approved": active, "change_waiting": pending}.get(state)
+    care = (active or pending or draft)
+    return render_page(
+        "participant/safety_plan.html", current="safety_plan", nav=nav, state=state,
+        shown=shown.to_dict(for_patient=True) if shown else None,
+        editing=editing.to_dict(for_patient=True) if editing else None,
+        care=care.to_dict(for_patient=True) if care else None,
+        approved_at=active.approved_at if active else None,
+        sent_at=pending.updated_at if pending else None,
+        allow_avoid=bool(get_effective_setting("allow_patient_anti_patterns", nav.provider_id, True)),
+        ratings=PLAN_RATINGS,
+    )
+
+
+# The 1-5 scales the safety plan form asks about (the prompt reads them;
+# see prompts/composer.py). Labels as today's form, in plain words.
+PLAN_RATINGS = {
+    "severity": ["Mild", "Mild to moderate", "Moderate", "Moderate to severe", "Severe"],
+    "effectiveness": ["A little", "Somewhat", "Moderately", "A lot", "Very much"],
+    "comfort": ["Very low", "Low", "Moderate", "High", "Very high"],
+}
 
 
 @participant_bp.route("/reports")

@@ -77,8 +77,10 @@ def update_patient_sections():
     if 'reasons_for_living' in data:
         plan.set_reasons_for_living(data['reasons_for_living'])
 
-    # If this was a draft and patient sections are now complete, move to pending_review
-    if plan.status == 'draft' and plan.is_complete():
+    # If this was a draft and patient sections are now complete, move to
+    # pending_review. "submit": false saves a draft without sending it (the
+    # new participant page's Save for later); it defaults to sending, as before.
+    if plan.status == 'draft' and plan.is_complete() and data.get('submit', True) is not False:
         plan.status = 'pending_review'
 
     plan.updated_at = time.time()

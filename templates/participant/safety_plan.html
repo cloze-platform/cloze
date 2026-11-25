@@ -1,0 +1,263 @@
+{% extends "participant/base.html" %}
+{# The participant's safety plan. state comes from participant_nav:
+   off, none, your_turn, waiting, approved, change_waiting.
+   shown: the plan to read (approved / pending); editing: the plan the form
+   starts from; care: where the care team's parts come from. All are
+   SafetyPlan.to_dict(for_patient=True), so hidden items never reach the page. #}
+
+{% block title %}Safety plan · Cloze{% endblock %}
+
+{% macro rating(kind, name, value, label) %}
+  <label class="flex flex-col gap-1 text-[13px] font-medium text-p-ink-3">{{ label }}
+    <select data-field="{{ name }}" class="min-h-11 rounded-xl border border-p-line-strong bg-p-surface px-3 text-[15px] text-p-ink">
+      {% for text in ratings[kind] %}<option value="{{ loop.index }}" {% if (value or 3) == loop.index %}selected{% endif %}>{{ text }}</option>{% endfor %}
+    </select>
+  </label>
+{% endmacro %}
+
+{% macro text(name, label, value, wide=false) %}
+  <label class="flex flex-col gap-1 text-[13px] font-medium text-p-ink-3 {{ 'sm:col-span-2' if wide }}">{{ label }}
+    <input type="text" data-field="{{ name }}" value="{{ value or '' }}" autocomplete="off"
+           class="min-h-11 rounded-xl border border-p-line-strong bg-p-surface px-3 text-base text-p-ink">
+  </label>
+{% endmacro %}
+
+{% macro remove() %}
+  <button type="button" data-remove-row class="self-start rounded-lg px-2 py-1 text-[13px] font-semibold text-p-ink-3 hover:bg-p-raised hover:text-p-help">Remove</button>
+{% endmacro %}
+
+{# One editable entry per section. Empty ones are what "+ Add" copies. #}
+{% macro row(section, item={}) %}
+  <div data-row class="flex flex-col gap-3 rounded-2xl bg-p-quiet p-4">
+    <div class="grid gap-3 sm:grid-cols-2">
+      {% if section == "warning_signs" %}
+        {{ text("sign", "What happens?", item.sign, wide=true) }}
+        {{ text("context", "When does this happen?", item.context) }}
+        {{ rating("severity", "severity", item.severity, "How strong is it?") }}
+      {% elif section == "coping_strategies" %}
+        {{ text("strategy", "What do you do?", item.strategy, wide=true) }}
+        {{ text("context", "When does it work?", item.context) }}
+        {{ text("patient_language", "What do you call this?", item.patient_language) }}
+        {{ rating("effectiveness", "effectiveness", item.effectiveness, "How much does it help?") }}
+      {% elif section == "support_network" %}
+        {{ text("person", "Name", item.person) }}
+        {{ text("relationship", "Relationship", item.relationship) }}
+        {{ text("contact_preference", "How to contact them", item.contact_preference) }}
+        {{ rating("comfort", "comfort_level", item.comfort_level, "How comfortable are you reaching out?") }}
+      {% elif section == "reasons_for_living" %}
+        {{ text("reason", "What matters to you?", item.reason, wide=true) }}
+        {{ text("context", "Tell us more (optional)", item.context, wide=true) }}
+      {% else %}
+        {{ text("pattern", "What should the AI avoid?", item.pattern, wide=true) }}
+        {{ text("reason", "Why? (optional)", item.reason, wide=true) }}
+      {% endif %}
+    </div>
+    {{ remove() }}
+  </div>
+{% endmacro %}
+
+{% set SECTIONS = [
+  ("warning_signs", "Warning signs", "What are the signs that you're starting to struggle?", "+ Add a warning sign"),
+  ("coping_strategies", "Things that help me cope", "What helps you feel better when things are hard?", "+ Add something that helps"),
+  ("support_network", "People I can reach", "Who can you reach out to?", "+ Add a person"),
+  ("reasons_for_living", "Reasons for living", "What matters to you? What keeps you going?", "+ Add a reason"),
+] %}
+
+{# The plan to read. #}
+{% macro plan_view(plan) %}
+  {% set mine = plan.anti_patterns|selectattr("source", "equalto", "patient")|list %}
+  <div class="flex flex-col gap-7">
+    {% for key, title, _, _ in SECTIONS %}
+      <section aria-labelledby="view-{{ key }}" class="flex flex-col gap-2">
+        <h2 id="view-{{ key }}" class="text-lg font-semibold">{{ title }}</h2>
+        <ul class="flex flex-col border-t border-p-line" role="list">
+          {% for item in plan[key] %}
+            <li class="flex flex-col gap-0.5 border-b border-p-line py-3">
+              {% if key == "warning_signs" %}
+                <span class="text-base">{{ item.sign }}</span>{% if item.context %}<span class="text-sm text-p-ink-3">{{ item.context }}</span>{% endif %}
+              {% elif key == "coping_strategies" %}
+                <span class="text-base">{% if item.patient_language %}{{ item.patient_language }}: {% endif %}{{ item.strategy }}</span>{% if item.context %}<span class="text-sm text-p-ink-3">{{ item.context }}</span>{% endif %}
+              {% elif key == "support_network" %}
+                <span class="text-base">{{ item.person }}{% if item.relationship %} · {{ item.relationship }}{% endif %}</span>{% if item.contact_preference %}<span class="text-sm text-p-ink-3">{{ item.contact_preference }}</span>{% endif %}
+              {% else %}
+                <span class="text-base">{{ item.reason }}</span>{% if item.context %}<span class="text-sm text-p-ink-3">{{ item.context }}</span>{% endif %}
+              {% endif %}
+            </li>
+          {% else %}
+            <li class="border-b border-p-line py-3 text-sm text-p-hint">Nothing added yet</li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endfor %}
+    {% if mine %}
+      <section aria-labelledby="view-avoid" class="flex flex-col gap-2">
+        <h2 id="view-avoid" class="text-lg font-semibold">Things to avoid</h2>
+        <ul class="flex flex-col border-t border-p-line" role="list">
+          {% for item in mine %}
+            <li class="flex flex-col gap-0.5 border-b border-p-line py-3"><span class="text-base">{{ item.pattern }}</span>{% if item.reason %}<span class="text-sm text-p-ink-3">{{ item.reason }}</span>{% endif %}</li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+  </div>
+{% endmacro %}
+
+{% block content %}
+<div class="mx-auto flex max-w-3xl flex-col gap-8 px-5 pb-14 pt-7 sm:px-8 lg:pt-12">
+
+  <div class="flex flex-col gap-2">
+    <div class="flex flex-wrap items-center gap-3">
+      <h1 class="text-[32px] font-semibold leading-tight tracking-tight">My safety plan</h1>
+      {% if state == "your_turn" %}<span class="inline-flex min-h-7 items-center rounded-full bg-p-waiting-soft px-3 text-[13px] font-semibold text-p-waiting">Your turn</span>
+      {% elif state == "waiting" %}<span class="inline-flex min-h-7 items-center rounded-full bg-p-raised px-3 text-[13px] font-semibold text-p-ink-3">Waiting for your care team</span>
+      {% elif state == "approved" %}<span class="inline-flex min-h-7 items-center rounded-full bg-p-done-soft px-3 text-[13px] font-semibold text-p-done">Approved{% if approved_at %} · {{ approved_at|p_day(nav.timezone) }}{% endif %}</span>
+      {% elif state == "change_waiting" %}<span class="inline-flex min-h-7 items-center rounded-full bg-p-waiting-soft px-3 text-[13px] font-semibold text-p-waiting">Change waiting for review</span>{% endif %}
+    </div>
+    <p class="max-w-xl text-base leading-relaxed text-p-ink-3">A plan you and your care team make for hard moments: what to notice, what helps, and who to reach.</p>
+  </div>
+
+  {% if state == "off" %}
+    <p class="rounded-[20px] bg-p-quiet px-6 py-5 text-base text-p-ink-3">Your study doesn't use a safety plan. If you need support now, <a href="{{ url_for('participant.help_page') }}" data-help-open class="font-semibold text-p-help">Get help now</a> is always here.</p>
+
+  {% elif state == "none" %}
+    <section class="flex flex-col gap-2 rounded-[20px] bg-p-accent-soft px-6 py-5">
+      <h2 class="text-lg font-semibold">Your care team is starting your plan</h2>
+      <p class="text-base leading-relaxed text-p-ink-3">Once they have, you'll add your parts here: the signs you notice, what helps, the people you can reach, and your reasons for living.{% if nav.safety_plan.required %} Your exercises open once it's approved.{% endif %}</p>
+    </section>
+
+  {% else %}
+    {# ── Where the plan stands ── #}
+    {% if state == "your_turn" %}
+      <section class="flex flex-col gap-3 rounded-[20px] bg-p-accent-soft px-6 py-5">
+        <p class="text-base leading-relaxed">Your care team started this plan with you. Add your parts below, then send it to them to look over. You can save it and come back any time.</p>
+        {% set done = nav.safety_plan.sections_done %}
+        <div class="flex items-center gap-3">
+          <span aria-hidden="true" class="flex gap-1">{% for i in range(4) %}<span class="h-[5px] w-8 rounded-full {{ 'bg-p-accent' if i < done else 'bg-p-line' }}"></span>{% endfor %}</span>
+          <span class="text-sm font-medium text-p-accent-ink">{{ done }} of 4 parts added</span>
+        </div>
+      </section>
+    {% elif state == "waiting" %}
+      <section class="flex items-start gap-3.5 rounded-[20px] bg-p-quiet px-6 py-5">
+        <span class="mt-0.5 text-p-ink-3">{{ icon("clock", 20) }}</span>
+        <div class="flex flex-col gap-0.5">
+          <span class="text-base font-semibold">Sent to your care team{% if sent_at %} on {{ sent_at|p_long(nav.timezone) }}{% endif %}</span>
+          <span class="text-[15px] text-p-ink-3">They'll look it over. Once they approve it, you'll see it here and in Get help now.</span>
+        </div>
+      </section>
+    {% elif state == "approved" %}
+      <section class="flex flex-wrap items-center gap-4 rounded-[20px] bg-p-quiet px-6 py-5">
+        <p class="flex-[1_1_300px] text-base leading-relaxed">This is your plan. The most useful parts also show in Get help now, so they're one tap away when you need them.</p>
+        <button type="button" data-edit-plan class="inline-flex min-h-11 items-center rounded-xl border border-p-line-strong bg-p-surface px-4 text-[15px] font-semibold text-p-ink hover:bg-p-raised">Suggest a change</button>
+      </section>
+    {% elif state == "change_waiting" %}
+      <section class="flex flex-wrap items-start gap-4 rounded-[20px] bg-p-waiting-soft px-6 py-5 shadow-[inset_0_0_0_1px_var(--p-waiting-line)]">
+        <span class="mt-0.5 text-p-waiting">{{ icon("clock", 20) }}</span>
+        <div class="flex flex-[1_1_260px] flex-col gap-0.5">
+          <span class="text-base font-semibold">You suggested changes{% if sent_at %} on {{ sent_at|p_long(nav.timezone) }}{% endif %}</span>
+          <span class="text-[15px] text-p-ink-2">Your care team is reviewing them. Until they approve them, the plan below is the one that counts.</span>
+        </div>
+        <button type="button" data-edit-plan class="inline-flex min-h-11 items-center rounded-xl border border-p-line-strong bg-p-surface px-4 text-[15px] font-semibold text-p-ink hover:bg-p-raised">Change my suggestions</button>
+      </section>
+    {% endif %}
+
+    {# ── The participant's parts: to read ── #}
+    {% if shown %}<div id="plan-view">{{ plan_view(shown) }}</div>{% endif %}
+
+    {# ── The participant's parts: to add or change ── #}
+    {% if editing %}
+      {% set mine = editing.anti_patterns|selectattr("source", "equalto", "patient")|list %}
+      <form id="plan-form" class="{{ 'hidden' if state != 'your_turn' }} flex flex-col gap-8" novalidate
+            data-draft="{{ 'true' if state == 'your_turn' else 'false' }}">
+        {% for key, title, prompt, add in SECTIONS %}
+          <section aria-labelledby="edit-{{ key }}" data-section="{{ key }}" class="flex flex-col gap-3">
+            <div class="flex flex-col gap-0.5">
+              <h2 id="edit-{{ key }}" class="text-lg font-semibold">{{ title }}</h2>
+              <p class="text-[15px] text-p-ink-3">{{ prompt }}</p>
+            </div>
+            <div data-rows class="flex flex-col gap-3">
+              {% for item in editing[key] %}{{ row(key, item) }}{% else %}{{ row(key) }}{% endfor %}
+            </div>
+            <template data-new-row>{{ row(key) }}</template>
+            <button type="button" data-add-row class="self-start rounded-lg px-2 py-1.5 text-[15px] font-semibold text-p-accent-ink hover:bg-p-raised">{{ add }}</button>
+          </section>
+        {% endfor %}
+
+        {% if allow_avoid or mine %}
+          <section aria-labelledby="edit-avoid" data-section="anti_patterns" class="flex flex-col gap-3">
+            <div class="flex flex-col gap-0.5">
+              <h2 id="edit-avoid" class="text-lg font-semibold">Things to avoid <span class="text-sm font-normal text-p-hint">Optional</span></h2>
+              <p class="text-[15px] text-p-ink-3">Is there anything you'd like the AI to avoid doing or saying?</p>
+            </div>
+            {% if mine %}
+              <ul class="flex flex-col border-t border-p-line" role="list">
+                {% for item in mine %}<li class="border-b border-p-line py-2.5 text-base">{{ item.pattern }}{% if item.reason %} <span class="text-sm text-p-ink-3">· {{ item.reason }}</span>{% endif %}</li>{% endfor %}
+              </ul>
+              <p class="text-[13px] text-p-hint">To change these, ask your care team.</p>
+            {% endif %}
+            {% if allow_avoid %}
+              <div data-rows class="flex flex-col gap-3"></div>
+              <template data-new-row>{{ row("anti_patterns") }}</template>
+              <button type="button" data-add-row class="self-start rounded-lg px-2 py-1.5 text-[15px] font-semibold text-p-accent-ink hover:bg-p-raised">+ Add something to avoid</button>
+            {% endif %}
+          </section>
+        {% endif %}
+
+        <p id="plan-error" role="alert" class="hidden rounded-xl bg-p-help-soft px-4 py-3 text-[15px] text-p-help"></p>
+        <div class="flex flex-wrap items-center gap-3 border-t border-p-line pt-6">
+          <button type="submit" data-send class="inline-flex min-h-12 items-center rounded-[14px] bg-p-accent px-5 text-base font-semibold text-p-on-accent hover:bg-p-accent-hover disabled:opacity-60">Send to my care team</button>
+          {% if state == "your_turn" %}
+            <button type="button" data-save class="inline-flex min-h-12 items-center rounded-[14px] border border-p-line-strong bg-p-surface px-5 text-base font-semibold text-p-ink hover:bg-p-raised disabled:opacity-60">Save for later</button>
+            <span class="text-sm text-p-ink-3">You can keep changing it until you send it.</span>
+          {% else %}
+            <button type="button" data-cancel-edit class="inline-flex min-h-12 items-center rounded-[14px] px-4 text-base font-semibold text-p-accent-ink hover:bg-p-raised">Cancel</button>
+            <span class="text-sm text-p-ink-3">Your current plan stays in place until your care team approves the change.</span>
+          {% endif %}
+        </div>
+      </form>
+    {% endif %}
+
+    {# ── The care team's parts ── #}
+    {% if care %}
+      {% set theirs = care.anti_patterns|rejectattr("source", "equalto", "patient")|list %}
+      {% set emergency = care.emergency_plan or {} %}
+      {% if care.care_team or theirs or emergency.activation_conditions or emergency.preferred_facility %}
+        <section aria-labelledby="care-team" class="flex flex-col gap-4 rounded-[20px] border border-p-line px-6 py-6">
+          <div class="flex flex-col gap-0.5">
+            <p class="text-[13px] font-semibold text-p-hint">From your care team</p>
+            <h2 id="care-team" class="text-lg font-semibold">My care team</h2>
+          </div>
+          {% if care.care_team %}
+            <ul class="flex flex-col gap-3" role="list">
+              {% for member in care.care_team if member.name %}
+                <li class="flex flex-col gap-0.5">
+                  <span class="text-base font-semibold">{{ member.name }}{% if member.role %} <span class="font-normal text-p-ink-3">· {{ member.role }}</span>{% endif %}</span>
+                  {% if member.contact_protocol %}<span class="text-[15px] text-p-ink-3">{{ member.contact_protocol }}</span>{% endif %}
+                  {% if member.after_hours %}<span class="text-[15px] text-p-ink-3">After hours: {{ member.after_hours }}</span>{% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+          {% if emergency.activation_conditions or emergency.preferred_facility %}
+            <div class="flex flex-col gap-1">
+              <h3 class="text-base font-semibold">If things get worse</h3>
+              {% if emergency.activation_conditions %}<p class="text-[15px] leading-relaxed text-p-ink-2">{{ emergency.activation_conditions }}</p>{% endif %}
+              {% if emergency.preferred_facility %}<p class="text-[15px] leading-relaxed text-p-ink-2">Where to go: {{ emergency.preferred_facility }}</p>{% endif %}
+            </div>
+          {% endif %}
+          {% if theirs %}
+            <div class="flex flex-col gap-1">
+              <h3 class="text-base font-semibold">What the AI will avoid</h3>
+              <ul class="flex list-disc flex-col gap-1 pl-5 text-[15px] text-p-ink-2">{% for item in theirs %}<li>{{ item.pattern }}</li>{% endfor %}</ul>
+            </div>
+          {% endif %}
+          <p class="text-[13px] text-p-hint">Only your care team can change this part. Ask them if something here isn't right.</p>
+        </section>
+      {% endif %}
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if editing %}<script src="{{ url_for('static', filename='participant/safety-plan.js') }}"></script>{% endif %}
+{% endblock %}
