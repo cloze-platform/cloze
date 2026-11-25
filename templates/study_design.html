@@ -206,6 +206,7 @@
   var patients = [];
   var models = [];
   var systemPrompts = [];
+  var mediaAssets = [];
 
   // ── Init ──────────────────────────────────────────────────
 
@@ -215,11 +216,13 @@
       fetch('/api/provider/patients').then(r => r.json()),
       fetch('/api/models').then(r => r.json()),
       fetch('/api/system_prompts').then(r => r.json()),
+      fetch('/api/provider/media').then(r => r.ok ? r.json() : { assets: [] }),
     ]);
     flows = results[0];
     patients = results[1];
     models = results[2];
     systemPrompts = results[3];
+    mediaAssets = results[4].assets || [];
     renderFlowList();
   }
 
@@ -458,12 +461,31 @@
         '</div>' +
         '<div><span class="text-[11px] text-stone-300">Purpose</span>' +
         '<input type="text" data-field="purpose" value="' + escapeHtml(chat.purpose || '') + '" placeholder="Brief description..." class="inline-input text-sm text-stone-500 py-1"></div>' +
+        '<div class="grid grid-cols-2 gap-4">' +
+          '<div><span class="text-[11px] text-stone-300">Greeting</span>' +
+          '<input type="text" data-field="greeting_text" maxlength="200" value="' + escapeHtml(chat.greeting_text || '') + '" placeholder="Your default greeting" class="inline-input text-sm text-stone-700 py-1"></div>' +
+          '<div><span class="text-[11px] text-stone-300">Greeting Image</span>' +
+          '<select data-field="greeting_asset_id" class="inline-input text-sm text-stone-700 py-1 cursor-pointer">' +
+            renderGreetingImageOptions(chat.greeting_asset) +
+          '</select></div>' +
+        '</div>' +
         '<div class="flex items-center gap-3 pt-1">' +
           '<button onclick="saveChat(' + chat.id + ')" class="text-sm font-medium text-cloze-indigo hover:text-cloze-hover transition-colors">Save</button>' +
           '<span id="chat-save-status-' + chat.id + '" class="text-xs text-stone-400"></span>' +
         '</div>' +
       '</div>' +
     '</div>';
+  }
+
+  // Images from the researcher's media library (Settings). A removed image a
+  // chat already uses stays listed so saving the chat doesn't drop it.
+  function renderGreetingImageOptions(current) {
+    var options = mediaAssets.slice();
+    if (current && !options.some(function(a) { return a.id === current.id; })) options.push(current);
+    var currentId = current ? current.id : '';
+    return '<option value="">Your default image</option>' + options.map(function(a) {
+      return '<option value="' + escapeHtml(a.id) + '"' + (a.id === currentId ? ' selected' : '') + '>' + escapeHtml(a.label) + '</option>';
+    }).join('');
   }
 
   function toggleChatDetails(chatId) {
@@ -629,6 +651,8 @@
         payload[field] = val ? parseInt(val) : null;
       } else if (field === 'max_messages') {
         payload[field] = val ? parseInt(val) : null;
+      } else if (field === 'greeting_asset_id') {
+        payload[field] = val || null;
       } else {
         payload[field] = val;
       }
@@ -637,21 +661,23 @@
     var statusEl = document.getElementById('chat-save-status-' + chatId);
     statusEl.textContent = 'Saving...';
 
-    await fetch('/api/provider/chats/' + chatId, {
+    var resp = await fetch('/api/provider/chats/' + chatId, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+    var saved = await resp.json().catch(function() { return {}; });
+    if (!resp.ok) {
+      statusEl.textContent = saved.error || 'Error saving';
+      statusEl.classList.add('text-red-500');
+      return;
+    }
 
     // Update local state
     currentFlow.phases.forEach(function(p) {
       p.chats.forEach(function(c) {
         if (c.id === chatId) {
-          Object.assign(c, payload);
-          if (payload.model_id) {
-            var m = models.find(function(mo) { return mo.id === payload.model_id; });
-            c.model_name = m ? m.name : '';
-          }
+          Object.assign(c, saved);
           if (payload.title) {
             // Update the title in the row above the form
             var row = document.getElementById('chat-' + chatId);
@@ -665,6 +691,7 @@
     });
 
     statusEl.textContent = 'Saved';
+    statusEl.classList.remove('text-red-500');
     statusEl.classList.add('text-emerald-600');
     setTimeout(function() {
       renderPhases();

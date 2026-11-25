@@ -171,6 +171,40 @@
     </div>
   </section>
 
+  {# Chat greeting #}
+  <section id="greetingSection" class="mb-8 rounded-lg border border-stone-200 bg-white">
+    <div class="border-b border-stone-100 px-5 py-3">
+      <h3 class="text-sm font-semibold text-stone-900">Chat Greeting</h3>
+      <p class="mt-0.5 text-xs text-stone-500">What participants see in a chat before they send their first message. Each chat in Study Design can set its own text or image instead.</p>
+    </div>
+    <div class="p-5">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div class="space-y-3">
+          <div>
+            <label for="greetingText" class="mb-1.5 block text-xs font-medium text-stone-500 uppercase tracking-wide">Text</label>
+            <input type="text" id="greetingText" maxlength="200" oninput="renderGreetingPreview()"
+                   class="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-cloze-indigo focus:outline-none focus:ring-1 focus:ring-cloze-indigo"
+                   placeholder="Send a message to get started.">
+          </div>
+          <div>
+            <label for="greetingAsset" class="mb-1.5 block text-xs font-medium text-stone-500 uppercase tracking-wide">Image</label>
+            <select id="greetingAsset" onchange="renderGreetingPreview()"
+                    class="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-cloze-indigo focus:outline-none focus:ring-1 focus:ring-cloze-indigo"></select>
+            <p class="mt-1 text-xs text-stone-400">Images come from your media library below.</p>
+          </div>
+        </div>
+        <div>
+          <label class="mb-1.5 block text-xs font-medium text-stone-500 uppercase tracking-wide">Preview</label>
+          <div id="greetingPreview" class="flex min-h-[12rem] flex-col items-center justify-center gap-3 rounded-lg border border-stone-200 bg-stone-50 p-4 text-center"></div>
+        </div>
+      </div>
+      <div class="mt-4 flex items-center gap-3">
+        <button onclick="saveGreeting()" class="rounded-lg bg-cloze-indigo px-4 py-2 text-sm font-medium text-white hover:bg-cloze-hover">Save</button>
+        <span id="greetingSaveStatus" class="text-xs text-stone-400"></span>
+      </div>
+    </div>
+  </section>
+
   {# Media library #}
   <section id="mediaSection" class="mb-8 rounded-lg border border-stone-200 bg-white">
     <div class="border-b border-stone-100 px-5 py-3">
@@ -332,6 +366,7 @@
       renderPrompts();
       renderFlagsSummary();
 
+      document.getElementById('greetingText').value = myFlags.greeting_text || '';
       await loadMedia();
 
       // Auto-size all textareas after content is loaded
@@ -549,7 +584,7 @@
     }
   }
 
-  // ── Media library ─────────────────────────────────────────
+  // ── Chat greeting and media library ───────────────────────
 
   var mediaAssets = [];
 
@@ -565,6 +600,7 @@
       console.error('Error loading media:', e);
     }
     renderMediaGrid();
+    renderGreetingAssetOptions();
   }
 
   function renderMediaGrid() {
@@ -587,11 +623,59 @@
     }).join('');
   }
 
+  function renderGreetingAssetOptions() {
+    var select = document.getElementById('greetingAsset');
+    var current = select.value || (myFlags.greeting_asset ? myFlags.greeting_asset.id : '');
+    var options = mediaAssets.slice();
+    // An image removed from the library still shows where it's already used.
+    if (myFlags.greeting_asset && !options.some(function(a) { return a.id === myFlags.greeting_asset.id; })) {
+      options.push(myFlags.greeting_asset);
+    }
+    select.innerHTML = '<option value="">Default icon</option>' + options.map(function(a) {
+      return '<option value="' + escapeHtml(a.id) + '"' + (a.id === current ? ' selected' : '') + '>' + escapeHtml(a.label) + '</option>';
+    }).join('');
+    renderGreetingPreview();
+  }
+
+  function renderGreetingPreview() {
+    var assetId = document.getElementById('greetingAsset').value;
+    var text = document.getElementById('greetingText').value.trim() || 'Send a message to get started.';
+    var asset = mediaAssets.concat(myFlags.greeting_asset ? [myFlags.greeting_asset] : [])
+      .find(function(a) { return a.id === assetId; });
+    var image = asset
+      ? '<img src="' + escapeHtml(asset.url) + '" alt="' + escapeHtml(asset.alt_text || '') + '" class="h-24 w-24 rounded-full object-cover">'
+      : '<div class="flex h-14 w-14 items-center justify-center rounded-full bg-violet-50 text-cloze-indigo" aria-hidden="true">' +
+          '<svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></div>';
+    document.getElementById('greetingPreview').innerHTML = image +
+      '<p class="max-w-xs text-sm text-stone-600">' + escapeHtml(text) + '</p>';
+  }
+
   function flashStatus(el, message, ok) {
     el.textContent = message;
     el.classList.toggle('text-emerald-600', ok);
     el.classList.toggle('text-red-500', !ok);
     if (ok) setTimeout(function() { el.textContent = ''; el.classList.remove('text-emerald-600'); }, 2000);
+  }
+
+  async function saveGreeting() {
+    var statusEl = document.getElementById('greetingSaveStatus');
+    statusEl.textContent = 'Saving...';
+    try {
+      var resp = await fetch('/api/provider/my-flags', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          greeting_text: document.getElementById('greetingText').value,
+          greeting_asset_id: document.getElementById('greetingAsset').value || null,
+        })
+      });
+      var result = await resp.json();
+      if (!resp.ok) return flashStatus(statusEl, result.error || 'Error saving', false);
+      flashStatus(statusEl, 'Saved', true);
+    } catch (e) {
+      flashStatus(statusEl, 'Error saving', false);
+    }
   }
 
   async function uploadMedia() {
@@ -639,6 +723,7 @@
       var result = await resp.json();
       if (!resp.ok) return flashStatus(statusEl, result.error || 'Error', false);
       mediaAssets = mediaAssets.map(function(a) { return a.id === result.id ? result : a; });
+      renderGreetingAssetOptions();
       flashStatus(statusEl, 'Saved', true);
     } catch (e) {
       flashStatus(statusEl, 'Error', false);

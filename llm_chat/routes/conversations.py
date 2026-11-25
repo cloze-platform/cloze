@@ -12,6 +12,7 @@ from ..services.llm_interface import LLMInterface
 from ..models import ProviderFeatureFlags
 from ..utils.settings_resolution import get_effective_setting, get_provider_id_for_patient
 from ..utils.access_hours import within_access_window
+from ..services.greeting import resolve_greeting
 
 conv_bp = Blueprint("conversations", __name__, url_prefix="")
 
@@ -179,6 +180,7 @@ def get_conversation_data(conversation_id):
         'window_id': window_id,
         'consent_provided': conversation.consent_provided,
         'messages': [m.to_dict() for m in messages],
+        'greeting': resolve_greeting(conversation),
         **turn_info,
     })
 

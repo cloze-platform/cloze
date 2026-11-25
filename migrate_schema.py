@@ -59,6 +59,11 @@ COLUMN_ADDITIONS = [
     # Link from a participant's chat to the study-design chat it came from
     # (filled in for existing chats after the tables are updated; see below).
     ('chat_templates', 'flow_chat_id', 'INTEGER'),
+    # Chat greeting: researcher default and per-chat override.
+    ('provider_feature_flags', 'greeting_text', 'TEXT'),
+    ('provider_feature_flags', 'greeting_asset_id', 'INTEGER'),
+    ('flow_chats', 'greeting_text', 'TEXT'),
+    ('flow_chats', 'greeting_asset_id', 'INTEGER'),
 ]
 
 

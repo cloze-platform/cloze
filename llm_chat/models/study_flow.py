@@ -84,10 +84,17 @@ class FlowChat(db.Model):
     custom_system_prompt = db.Column(db.Text, nullable=True)
     max_messages = db.Column(db.Integer, nullable=True)
     order_index = db.Column(db.Integer, default=0)
+    # Greeting shown in an empty chat; each part falls back to the researcher's
+    # default (ProviderFeatureFlags.greeting_*). Read when the chat is opened,
+    # not copied at enrollment, so edits reach participants already enrolled.
+    greeting_text = db.Column(db.Text, nullable=True)
+    greeting_asset_id = db.Column(db.Integer, db.ForeignKey('media_assets.id', ondelete='SET NULL'),
+                                  nullable=True)
 
     # Relationships
     model = db.relationship('Model')
     system_prompt = db.relationship('SystemPrompt')
+    greeting_asset = db.relationship('MediaAsset', foreign_keys=[greeting_asset_id])
 
     def to_dict(self):
         return {
@@ -101,6 +108,8 @@ class FlowChat(db.Model):
             'custom_system_prompt': self.custom_system_prompt,
             'max_messages': self.max_messages,
             'order_index': self.order_index,
+            'greeting_text': self.greeting_text,
+            'greeting_asset': self.greeting_asset.to_dict() if self.greeting_asset else None,
         }
 
 
