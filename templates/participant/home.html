@@ -11,7 +11,7 @@
 {% set hours = nav.opening_hours %}
 {% set any_begun = nav.exercises|rejectattr("state", "equalto", "not_started")|list %}
 {% set open_groups = nav.open_groups|sort(attribute="window.start_date")|selectattr("exercises")|list %}
-{% set preparing = nav.groups|selectattr("status", "equalto", "generating_report")|selectattr("exercises")|list %}
+{% set preparing = nav.preparing_reports %}
 
 <div class="mx-auto flex max-w-3xl flex-col gap-10 px-5 pb-14 pt-7 sm:px-8 lg:pt-12">
 
@@ -136,7 +136,7 @@
           <span class="text-p-hint">{{ icon("chevron-right", 18, "", 2) }}</span>
         </a>
       {% endif %}
-      {% for group in preparing if group.exercises|selectattr("conversation")|list %}
+      {% for group in preparing %}
         <p class="flex min-h-[52px] items-center gap-3 rounded-[18px] border border-p-line px-5 text-[15px] text-p-ink-3">
           {{ icon("clock", 18, "text-p-hint") }}Your report from {{ group.name }} is being prepared.
         </p>

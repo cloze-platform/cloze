@@ -47,7 +47,7 @@ def new_conversation():
 @login_required
 def patient_reports():
     if current_user.is_patient():
-        return redirect('/dashboard')
+        return redirect('/reports' if uses_v2() else '/dashboard')
     return render_template("patient_reports.html")
 
 @conv_bp.route("/api/provider_settings")

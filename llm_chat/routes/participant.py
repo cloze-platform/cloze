@@ -10,6 +10,7 @@ only while the switch is v2. Anyone else gets 404, so on a v1 instance the
 pages don't exist.
 """
 
+import json
 from datetime import datetime
 from functools import wraps
 from zoneinfo import ZoneInfo
@@ -212,9 +213,29 @@ PLAN_RATINGS = {
 
 
 @participant_bp.route("/reports")
+@participant_bp.route("/reports/<int:report_id>")
 @participant_page
-def reports():
-    return render_page("participant/placeholder.html", current="reports", heading="Reports")
+def reports(report_id=None):
+    """The participant's reports: a list, and one open (the newest unless
+    report_id says otherwise). Only their own summary reports from visible
+    windows, the same rule as /api/reports/. Report content is today's,
+    from the unified report generator. 404 when reports are off."""
+    nav = participant_nav.build(current_user)
+    if not nav.reports_enabled:
+        abort(404)
+    reports = participant_nav.participant_reports_query(current_user.id).all()
+    if report_id is None:
+        report = reports[0] if reports else None
+    else:
+        report = next((r for r in reports if r.id == report_id), None)
+        if report is None:
+            abort(404)
+    html = None
+    if report is not None:
+        from report.generator import UnifiedReportGenerator
+        html = UnifiedReportGenerator(report.window_id).render_html(json.loads(report.report_data or "{}"))
+    return render_page("participant/reports.html", current="reports", nav=nav, reports=reports, report=report,
+                       report_html=html, groups={g.id: g for g in nav.groups}, preparing=nav.preparing_reports)
 
 
 # ── Template helpers ──────────────────────────────────────────

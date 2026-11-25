@@ -243,6 +243,17 @@ class Nav:
         return participant_reports_query(self.user.id).count() if self.reports_enabled else 0
 
     @cached_property
+    def preparing_reports(self):
+        """Closed groups whose report is still being made: the participant took
+        part, and no report exists yet."""
+        if not self.reports_enabled:
+            return []
+        done = {wid for (wid,) in participant_reports_query(self.user.id).with_entities(Report.window_id)}
+        return [g for g in self.groups
+                if g.status == "generating_report" and g.id not in done
+                and any(e.conversation for e in g.exercises)]
+
+    @cached_property
     def opening_hours(self):
         return opening_hours(self.provider_id)
 
