@@ -20,6 +20,14 @@ try:
 except ImportError:
     genai = None
 
+class LLMCallError(RuntimeError):
+    """The model didn't reply. user_message is safe to show a participant."""
+
+    def __init__(self, user_message):
+        super().__init__(user_message)
+        self.user_message = user_message
+
+
 class LLMInterface:
     """Unified interface for different LLM providers"""
     _provider_clients: Dict[str, object] = {}
@@ -102,7 +110,8 @@ class LLMInterface:
         print("========================\n")
 
     @classmethod
-    def call_llm(cls, model, messages: List[Dict], system_prompt: Optional[str] = None, config_override: Optional[Dict] = None) -> Tuple[str, float]:
+    def call_llm(cls, model, messages: List[Dict], system_prompt: Optional[str] = None, config_override: Optional[Dict] = None,
+                 raise_on_error: bool = False) -> Tuple[str, float]:
         """Call LLM with messages and return (response_text, response_time_sec)
 
         Args:
@@ -110,6 +119,8 @@ class LLMInterface:
             messages: List of message dicts with 'role' and 'content'
             system_prompt: Optional system prompt to prepend
             config_override: Optional config overrides (e.g., {'timeout': 180})
+            raise_on_error: On failure, raise LLMCallError instead of returning
+                a friendly message as if it were the reply
         """
         start_time = time.time()
 
@@ -270,6 +281,8 @@ class LLMInterface:
                 result = "I wasn't able to generate a response to that. Could you try rephrasing?"
             else:
                 result = "Something went wrong on my end. Please try again, and if the problem persists, let your provider know."
+            if raise_on_error:
+                raise LLMCallError(result) from e
 
         response_time = time.time() - start_time
         return result, response_time

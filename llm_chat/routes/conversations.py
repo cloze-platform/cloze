@@ -1,14 +1,16 @@
 import json
+import re
 import time
 from datetime import datetime
 from flask import Blueprint, render_template, jsonify, request, abort, redirect, current_app
 from flask_login import login_required, current_user
+from sqlalchemy.exc import IntegrityError
 from ..extensions import db
 from ..models import (
     User, ProviderPatient, ProviderSettings, SystemPrompt,
     Conversation, Model, Message, SavedSelection, ChatWindow
 )
-from ..services.llm_interface import LLMInterface
+from ..services.llm_interface import LLMCallError, LLMInterface
 from ..models import ProviderFeatureFlags
 from ..utils.settings_resolution import get_effective_setting, get_provider_id_for_patient
 from ..utils.access_hours import within_access_window
@@ -276,6 +278,23 @@ def send_message(conversation_id):
     if current_user.is_patient() and not conversation.window_id:
         return jsonify({'error': 'This conversation is not part of a study chat window'}), 403
 
+    data = request.json or {}
+    message_text = data.get('message')
+    if not isinstance(message_text, str) or not message_text.strip():
+        return jsonify({'error': 'Write a message first.'}), 400
+
+    # The new participant page names each message (client_message_id), so a
+    # send it retries, after a lost connection or a failed reply, is
+    # recognised: the saved reply comes back and nothing is sent twice. Today's
+    # page sends no id and keeps today's behaviour.
+    client_id = data.get('client_message_id')
+    if client_id is not None:
+        if not isinstance(client_id, str) or not CLIENT_MESSAGE_ID.fullmatch(client_id):
+            return jsonify({'error': 'client_message_id must be 8 to 64 letters, digits or dashes'}), 400
+        saved = Message.query.filter_by(conversation_id=conversation.id, client_message_id=client_id).first()
+        if saved is not None:
+            return _repeat_result(conversation, saved)
+
     # An ended conversation stays ended (services/conversation_end.py).
     window = db.session.get(ChatWindow, conversation.window_id) if conversation.window_id else None
     if stamp_window_closed(conversation, window):
@@ -350,31 +369,33 @@ def send_message(conversation_id):
                     if today_messages >= settings.max_messages_per_day:
                         return jsonify({'error': 'Daily message limit reached'}), 403
 
-    data = request.json or {}
-
     # The model sees the latest 20 messages, read before the new one is saved
     # so it isn't sent twice, then the new message.
     recent = (conversation.messages.order_by(None)
               .order_by(Message.timestamp.desc(), Message.id.desc()).limit(20).all())
     history = [{'role': m.role, 'content': m.content} for m in reversed(recent)]
-    history.append({'role': 'user', 'content': data['message']})
+    history.append({'role': 'user', 'content': message_text})
+
+    # CLOZE-Guard v0: keyword pre-classifier. Best-effort — must never block chat.
+    # It runs before anything is saved, because it commits its alert: a reply
+    # that then fails must not take the alert with it, and a retry of the same
+    # message (client_id) doesn't alert again.
+    if current_user.is_patient():
+        try:
+            from ..services.guard import scan_and_escalate
+            scan_and_escalate(current_user, conversation, message_text, client_message_id=client_id)
+        except Exception:
+            current_app.logger.exception("CLOZE-Guard scan failed")
 
     # Save user message
     user_message = Message(
         conversation_id=conversation_id,
         role='user',
-        content=data['message'],
-        timestamp=time.time()
+        content=message_text,
+        timestamp=time.time(),
+        client_message_id=client_id,
     )
     db.session.add(user_message)
-
-    # CLOZE-Guard v0: keyword pre-classifier. Best-effort — must never block chat.
-    if current_user.is_patient():
-        try:
-            from ..services.guard import scan_and_escalate
-            scan_and_escalate(current_user, conversation, data['message'])
-        except Exception:
-            current_app.logger.exception("CLOZE-Guard scan failed")
 
     # Generate title if first message
     if conversation.messages.count() == 0:
@@ -410,8 +431,15 @@ def send_message(conversation_id):
             else:
                 system_prompt = turn_notice
 
-    # Call LLM
-    response_text, response_time = LLMInterface.call_llm(conversation.model, history, system_prompt)
+    # Call LLM. For the new page (client_id), a failed call saves nothing and
+    # says so, and the page offers Try again. Today's page gets the failure
+    # as a friendly reply, as before.
+    try:
+        response_text, response_time = LLMInterface.call_llm(
+            conversation.model, history, system_prompt, raise_on_error=client_id is not None)
+    except LLMCallError as e:
+        db.session.rollback()
+        return jsonify({'error': e.user_message, 'reply_failed': True, 'retry': True}), 502
 
     # Save assistant message
     assistant_message = Message(
@@ -426,14 +454,50 @@ def send_message(conversation_id):
     conversation.updated_at = time.time()
     if max_turns and turns_remaining <= 0:
         end_conversation(conversation, Conversation.TURN_LIMIT)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # The same message sent twice at once: the other request saved it.
+        db.session.rollback()
+        saved = Message.query.filter_by(conversation_id=conversation.id, client_message_id=client_id).first()
+        if client_id is None or saved is None:
+            raise
+        return _repeat_result(conversation, saved)
 
-    result = {'response': response_text, 'message_id': assistant_message.id}
+    result = {'response': response_text, 'message_id': assistant_message.id,
+              'user_message_id': user_message.id,
+              'ended': conversation.ended_at is not None, 'end_reason': conversation.end_reason}
     if max_turns:
         result['turns_remaining'] = max(0, turns_remaining)
         result['max_turns'] = max_turns
         result['turn_limit_reached'] = turns_remaining <= 0
     return jsonify(result)
+
+
+CLIENT_MESSAGE_ID = re.compile(r'[A-Za-z0-9-]{8,64}')
+
+
+def _repeat_result(conversation, saved):
+    """The answer to a send the server already handled (same
+    client_message_id): its saved reply, as the first send would have got it."""
+    reply = (Message.query
+             .filter(Message.conversation_id == conversation.id, Message.role == 'assistant',
+                     Message.id > saved.id)
+             .order_by(Message.id).first())
+    if reply is None:
+        return jsonify({'error': 'The reply to this message is missing.', 'reply_failed': True}), 409
+    result = {'response': reply.content, 'message_id': reply.id, 'user_message_id': saved.id, 'repeat': True,
+              'ended': conversation.ended_at is not None, 'end_reason': conversation.end_reason}
+    if current_user.is_patient():
+        max_turns = get_effective_setting('max_turns_per_conversation',
+                                          get_provider_id_for_patient(conversation.user_id))
+        if max_turns:
+            used = Message.query.filter_by(conversation_id=conversation.id, role='user').count()
+            result['turns_remaining'] = max(0, max_turns - used)
+            result['max_turns'] = max_turns
+            result['turn_limit_reached'] = used >= max_turns
+    return jsonify(result)
+
 
 ENDED_MESSAGES = {
     Conversation.TURN_LIMIT: 'This conversation has used all its turns.',

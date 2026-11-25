@@ -106,6 +106,11 @@ class Conversation(db.Model):
 
 class Message(db.Model):
     __tablename__ = 'messages'
+    __table_args__ = (
+        # A page's id for a participant message, so a retried send returns the
+        # saved reply instead of sending twice (routes/conversations.py).
+        db.Index('uq_messages_conversation_client', 'conversation_id', 'client_message_id', unique=True),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     conversation_id = db.Column(db.Integer, db.ForeignKey('conversations.id'), nullable=False, index=True)
@@ -114,6 +119,7 @@ class Message(db.Model):
     timestamp = db.Column(db.Float, nullable=False, index=True)
     token_count = db.Column(db.Integer)
     response_time = db.Column(db.Float)
+    client_message_id = db.Column(db.String(64), nullable=True)
 
     def to_dict(self):
         return {

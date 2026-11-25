@@ -69,6 +69,15 @@ COLUMN_ADDITIONS = [
     # in windows that have already ended are marked after the update; see below.
     ('conversations', 'ended_at', 'REAL'),
     ('conversations', 'end_reason', 'VARCHAR(32)'),
+    # The page's id for a participant message, for retried sends (unique per
+    # conversation; see INDEX_ADDITIONS).
+    ('messages', 'client_message_id', 'VARCHAR(64)'),
+]
+
+# ── Indexes on existing tables ───────────────────────────────────
+# Format: (index_name, table_name, columns, unique). Created after the columns.
+INDEX_ADDITIONS = [
+    ('uq_messages_conversation_client', 'messages', 'conversation_id, client_message_id', True),
 ]
 
 
@@ -131,6 +140,15 @@ def column_exists(cursor, table_name, column_name, db_type):
         return cursor.fetchone() is not None
 
 
+def index_exists(cursor, index_name, db_type):
+    if db_type == 'sqlite':
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name=?", (index_name,))
+    else:
+        cursor.execute("SELECT indexname FROM pg_indexes WHERE schemaname='public' AND indexname=%s",
+                       (index_name,))
+    return cursor.fetchone() is not None
+
+
 def run_migration(apply=False):
     conn, db_type = get_connection()
     cursor = conn.cursor()
@@ -152,6 +170,16 @@ def run_migration(apply=False):
             sql = f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type}"
             changes.append(sql)
             print(f"  ADD   {table_name}.{col_name} ({col_type})")
+
+    # ── Check index additions (after the columns they cover) ──
+    for index_name, table_name, columns, unique in INDEX_ADDITIONS:
+        if not table_exists(cursor, table_name, db_type):
+            continue
+        if index_exists(cursor, index_name, db_type):
+            print(f"  OK    index {index_name} — already exists")
+        else:
+            changes.append(f"CREATE {'UNIQUE ' if unique else ''}INDEX {index_name} ON {table_name} ({columns})")
+            print(f"  ADD   index {index_name} on {table_name} ({columns})")
 
     # ── Check for new tables (will be created by db.create_all) ──
     new_tables = ['safety_plans', 'audit_log', 'escalation_events', 'provider_feature_flags',

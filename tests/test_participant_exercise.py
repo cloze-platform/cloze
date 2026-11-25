@@ -142,6 +142,7 @@ def test_turns_left_and_the_few_turns_notice(study, login_as, v2, db):
     db.session.commit()
     main = _page(login_as(study["patient"]), _url(study["thoughts_conv"]))
     assert "4 turns left" in main and "4 turns left in this exercise." in main
+    assert 'id="few-turns" class="flex' in main
 
 
 def test_no_few_turns_notice_with_plenty_left(study, login_as, v2, db):
@@ -149,7 +150,7 @@ def test_no_few_turns_notice_with_plenty_left(study, login_as, v2, db):
     db.session.add(ProviderFeatureFlags(provider_id=study["provider"].id, max_turns_per_conversation=40))
     db.session.commit()
     main = _page(login_as(study["patient"]), _url(study["thoughts_conv"]))
-    assert "38 turns left" in main and "in this exercise." not in main
+    assert "38 turns left" in main and 'id="few-turns" class="hidden' in main
 
 
 # ── Finished and not open ──
@@ -198,3 +199,15 @@ def test_the_menu_marks_the_exercise_and_the_phone_gets_its_own_header(study, lo
     assert f'href="{_url(study["thoughts_conv"])}" aria-current="page"' in rail
     assert '<nav aria-label="Main"' not in html                # no phone tabs
     assert "Back to Home" in html and html.count("data-help-open") >= 2
+
+
+def test_the_reply_box_only_when_replying_is_possible(study, login_as, v2, db):
+    _agreed(db, study["thoughts_conv"], study["welcome_conv"])
+    client = login_as(study["patient"])
+    html = client.get(_url(study["thoughts_conv"])).get_data(as_text=True)
+    assert f'<form id="composer" data-conversation-id="{study["thoughts_conv"].id}"' in html
+    assert 'id="reply"' in html and "participant/chat.js" in html
+    finished = client.get(_url(study["welcome_conv"])).get_data(as_text=True)
+    assert 'id="composer"' not in finished and "participant/chat.js" not in finished
+    agree = client.get(_url(study["star_conv"])).get_data(as_text=True)
+    assert 'id="composer"' not in agree

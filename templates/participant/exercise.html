@@ -83,13 +83,22 @@
 
   <div id="dock" class="sticky bottom-0 z-10 mx-auto w-full max-w-[700px] bg-p-page px-5 pb-[max(14px,env(safe-area-inset-bottom))] pt-2 lg:px-6">
     {% if state == "open" %}
-      {% if exercise.turns_left is not none and exercise.turns_left <= 5 %}
-        <p class="mb-2.5 flex items-start gap-2.5 rounded-2xl bg-p-waiting-soft px-4 py-3 text-sm text-p-ink-2">
-          <span class="mt-0.5 text-p-waiting">{{ icon("clock", 16, "", 2) }}</span>
-          <span><strong class="font-semibold">{{ exercise.turns_left }} turn{{ "s" if exercise.turns_left != 1 }} left in this exercise.</strong> When they're used up, you can still read everything here.</span>
-        </p>
-      {% endif %}
-      {# The reply box lands here (stage 1, commit 8). #}
+      {% set few = exercise.turns_left is not none and exercise.turns_left <= 5 %}
+      <p id="few-turns" class="{{ 'flex' if few else 'hidden' }} mb-2.5 items-start gap-2.5 rounded-2xl bg-p-waiting-soft px-4 py-3 text-sm text-p-ink-2">
+        <span class="mt-0.5 text-p-waiting">{{ icon("clock", 16, "", 2) }}</span>
+        <span><strong class="font-semibold" data-few-turns-count>{{ exercise.turns_left }} turn{{ "s" if exercise.turns_left != 1 }} left in this exercise.</strong> When they're used up, you can still read everything here.</span>
+      </p>
+      {# The reply box: one line that grows as you type (static/participant/chat.js). #}
+      <form id="composer" data-conversation-id="{{ exercise.conversation_id }}"
+            class="flex items-end gap-2 rounded-[28px] border border-p-line-strong bg-p-surface py-1.5 pl-5 pr-1.5 shadow-[0_1px_2px_rgba(24,24,31,0.04),0_8px_24px_rgba(24,24,31,0.05)] focus-within:border-p-accent focus-within:shadow-[0_0_0_1px_var(--p-accent)]">
+        <label for="reply" class="sr-only">Your reply</label>
+        <textarea id="reply" name="message" rows="1" required autocomplete="off" placeholder="Write your reply…"
+                  class="max-h-48 min-w-0 flex-1 resize-none self-center border-0 bg-transparent py-2.5 text-base leading-normal text-p-ink outline-none placeholder:text-p-hint focus:outline-none focus-visible:outline-none"></textarea>
+        <button type="submit" id="send" aria-label="Send"
+                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-p-accent text-p-on-accent hover:bg-p-accent-hover disabled:cursor-not-allowed disabled:opacity-50">
+          {{ icon("send", 20, "", 2.2) }}
+        </button>
+      </form>
 
     {% elif state != "agree" %}
       <section aria-labelledby="dock-heading" class="flex flex-wrap items-start gap-4 rounded-[20px] border border-p-line bg-p-quiet px-5 py-5">
@@ -141,4 +150,5 @@
 {% include "_markdown_scripts.html" %}
 <script src="{{ url_for('static', filename='js/shared.js') }}"></script>
 <script src="{{ url_for('static', filename='participant/exercise.js') }}"></script>
+{% if state == "open" %}<script src="{{ url_for('static', filename='participant/chat.js') }}"></script>{% endif %}
 {% endblock %}
