@@ -138,5 +138,7 @@ class SavedSelection(db.Model):
     conversation_id = db.Column(db.Integer, db.ForeignKey('conversations.id'), nullable=False)
     selection_text = db.Column(db.Text, nullable=False)
     message_ids = db.Column(db.Text)
-    note = db.Column(db.Text)
+    note = db.Column(db.Text)          # the participant's own note on the line
     created_at = db.Column(db.Float, default=lambda: time.time())
+
+    NOTE_LIMIT = 1000

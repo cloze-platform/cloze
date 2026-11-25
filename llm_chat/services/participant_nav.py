@@ -353,9 +353,10 @@ def safety_plan_state(patient_id, provider_id):
 
 def notebook_entries(user_id, limit=50):
     """The participant's saved lines, newest first, each with the title of the
-    conversation it came from: [(SavedSelection, title)]."""
-    selections = (SavedSelection.query.filter_by(user_id=user_id)
-                  .order_by(SavedSelection.created_at.desc(), SavedSelection.id.desc()).limit(limit).all())
+    conversation it came from: [(SavedSelection, title)]. limit=None for all."""
+    query = (SavedSelection.query.filter_by(user_id=user_id)
+             .order_by(SavedSelection.created_at.desc(), SavedSelection.id.desc()))
+    selections = (query.limit(limit) if limit else query).all()
     ids = {s.conversation_id for s in selections}
     titles = dict(db.session.query(Conversation.id, Conversation.title).filter(Conversation.id.in_(ids)).all()) if ids else {}
     return [(s, titles.get(s.conversation_id) or "An exercise") for s in selections]

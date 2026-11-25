@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 from flask import Blueprint, abort, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from ..models import Message, SafetyPlan
+from ..models import Message, SafetyPlan, SavedSelection
 from ..services import participant_nav
 from ..services.greeting import greeting_for
 from ..services.safety_info import DEFAULT_AGREEMENT, bold, safety_info
@@ -158,7 +158,19 @@ def closed():
 @participant_bp.route("/notebook")
 @participant_page
 def notebook():
-    return render_page("participant/placeholder.html", current="notebook", heading="Notebook")
+    """The participant's saved lines, grouped by the exercise they came from,
+    newest first, each with the participant's own note. 404 when the study
+    doesn't let participants save, as the menu leaves it out then."""
+    nav = participant_nav.build(current_user)
+    if not nav.can_save:
+        abort(404)
+    groups = {}
+    for selection, title in participant_nav.notebook_entries(current_user.id, limit=None):
+        group = groups.setdefault(selection.conversation_id, {
+            "title": title, "exercise": nav.exercise_for_conversation(selection.conversation_id), "lines": []})
+        group["lines"].append(selection)
+    return render_page("participant/notebook.html", current="notebook", nav=nav, groups=list(groups.values()),
+                       note_limit=SavedSelection.NOTE_LIMIT)
 
 
 @participant_bp.route("/safety-plan")

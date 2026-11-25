@@ -568,10 +568,33 @@ def get_selections():
     return jsonify([{
         'id': s.id,
         'text': s.selection_text,
+        # 'note' is the participant's note or, failing that, the conversation's
+        # title: today's pages read it as a label. The two separately:
         'note': s.note or conversation_titles.get(s.conversation_id) or f"Conversation {s.conversation_id}",
+        'own_note': s.note,
+        'conversation_title': conversation_titles.get(s.conversation_id),
         'conversation_id': s.conversation_id,
         'created_at': s.created_at
     } for s in selections])
+
+
+
+@conv_bp.route("/api/selections/<int:selection_id>", methods=["PUT"])
+@login_required
+def update_selection_note(selection_id):
+    """The participant's own note on a saved line. Only its owner can change it."""
+    selection = db.get_or_404(SavedSelection, selection_id)
+    if selection.user_id != current_user.id:
+        abort(403)
+    note = (request.json or {}).get('note')
+    if note is not None and not isinstance(note, str):
+        return jsonify({'error': 'note must be text'}), 400
+    note = (note or '').strip()
+    if len(note) > SavedSelection.NOTE_LIMIT:
+        return jsonify({'error': f'Notes can be up to {SavedSelection.NOTE_LIMIT} characters.'}), 400
+    selection.note = note or None
+    db.session.commit()
+    return jsonify({'status': 'success', 'id': selection.id, 'own_note': selection.note})
 
 @conv_bp.route("/api/selections/<int:selection_id>", methods=["DELETE"])
 @login_required
