@@ -12,6 +12,7 @@ from ..models import (User, Conversation, ProviderPatient, ProviderSettings,
                       ChatWindow, ChatTemplate, AuditLog, EscalationEvent, ProviderFeatureFlags, SystemPrompt,
                       StudyFlow, FlowPhase, FlowChat, FlowEnrollment)
 from ..utils.settings_resolution import get_effective_setting
+from ..services.greeting import apply_greeting_fields
 
 provider_bp = Blueprint("provider", __name__, url_prefix="")
 
@@ -410,6 +411,8 @@ def get_my_flags():
         'access_hours_end': flags.access_hours_end if flags else None,
         'access_hours_timezone': (flags.access_hours_timezone if flags else None) or 'America/New_York',
         'access_hours_days': _json_list(flags.access_hours_days if flags else None),
+        'greeting_text': flags.greeting_text if flags else None,
+        'greeting_asset': flags.greeting_asset.to_dict() if (flags and flags.greeting_asset) else None,
     })
 
 
@@ -511,9 +514,16 @@ def update_my_flags():
             else:
                 setattr(flags, key, None)
 
+    try:
+        apply_greeting_fields(flags, data, current_user)
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 400
+
     _log_provider_action('update_provider_content', 'provider_feature_flags', current_user.id,
                          {k: data[k] for k in data if k in editable
-                          or k in ('guard_enabled', 'access_hours_enabled', 'guard_keywords', 'access_hours_days')})
+                          or k in ('guard_enabled', 'access_hours_enabled', 'guard_keywords', 'access_hours_days',
+                                   'greeting_text', 'greeting_asset_id')})
     db.session.commit()
     return jsonify({'status': 'success'})
 
@@ -810,6 +820,7 @@ def delete_phase(phase_id):
     if phase.flow.provider_id != current_user.id:
         abort(403)
 
+    _unlink_templates([c.id for c in phase.chats])
     db.session.delete(phase)
     db.session.commit()
     return jsonify({'status': 'success'})
@@ -838,6 +849,10 @@ def create_flow_chat(phase_id):
         max_messages=data.get('max_messages'),
         order_index=max_order + 1,
     )
+    try:
+        apply_greeting_fields(chat, data, current_user)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     db.session.add(chat)
     db.session.flush()
 
@@ -869,6 +884,11 @@ def update_flow_chat(chat_id):
                 'custom_system_prompt', 'max_messages', 'order_index'):
         if key in data:
             setattr(chat, key, data[key])
+    try:
+        apply_greeting_fields(chat, data, current_user)
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 400
 
     db.session.commit()
     return jsonify(chat.to_dict())
@@ -882,6 +902,7 @@ def delete_flow_chat(chat_id):
     if chat.phase.flow.provider_id != current_user.id:
         abort(403)
 
+    _unlink_templates([chat.id])
     db.session.delete(chat)
     db.session.commit()
     return jsonify({'status': 'success'})
@@ -1012,9 +1033,21 @@ def _add_template_to_window(window, chat):
         custom_system_prompt=chat.custom_system_prompt,
         max_messages=chat.max_messages,
         order_index=chat.order_index,
+        flow_chat_id=chat.id,
     )
     db.session.add(template)
     return template
+
+
+def _unlink_templates(flow_chat_ids):
+    """Detach participants' chats from study-design chats about to be deleted.
+
+    Databases migrated with migrate_schema.py have no foreign key on
+    flow_chat_id to do this, and a dangling id could later match a new chat.
+    """
+    if flow_chat_ids:
+        ChatTemplate.query.filter(ChatTemplate.flow_chat_id.in_(flow_chat_ids)).update(
+            {ChatTemplate.flow_chat_id: None}, synchronize_session=False)
 
 
 def _backfill_chat_to_enrollments(flow, phase, chat):

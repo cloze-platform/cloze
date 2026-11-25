@@ -35,6 +35,10 @@ openai>=1.54.0
 anthropic>=0.39.0
 google-genai>=1.0.0
 
-# AWS SES (CLOZE-Guard email notifications). On EC2 the instance IAM role
-# provides credentials; locally set CLOZE_GUARD_AWS_PROFILE to a named profile.
+# AWS: SES (CLOZE-Guard email notifications) and S3 (researcher media). On AWS
+# the instance or task role provides credentials; locally set
+# CLOZE_GUARD_AWS_PROFILE (or AWS_PROFILE) to a named profile.
 boto3>=1.38.0
+
+# Researcher image uploads: decoded and re-encoded before storage.
+pillow>=10.0

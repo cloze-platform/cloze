@@ -130,6 +130,9 @@
 
     /* Messages area */
     #messagesContainer { background: var(--chat-page-dark) !important; }
+    #chatGreeting p { color: #d6d3d1 !important; }
+    #chatGreeting .bg-violet-50 { background: rgb(var(--soft-500-rgb) / 0.15) !important; }
+    #chatGreeting .text-cloze-indigo { color: var(--brand-on-dark) !important; }
 
     /* AI messages */
     .ai-msg .message-text { color: #d6d3d1 !important; }
@@ -1530,10 +1533,14 @@ async function loadConversationView(convId) {
     // Crisis bar (show for active conversations)
     document.getElementById('crisisBar').classList.remove('hidden');
 
-    // Render messages
-    container.innerHTML = conversationData.messages.map(function(msg) {
-      return renderMessage(msg.role, msg.content, msg.id, msg.timestamp);
-    }).join('');
+    // Render messages, or the greeting in a chat the participant can start
+    if (!conversationData.messages.length && canSend && conversationData.greeting) {
+      container.innerHTML = renderGreeting(conversationData.greeting);
+    } else {
+      container.innerHTML = conversationData.messages.map(function(msg) {
+        return renderMessage(msg.role, msg.content, msg.id, msg.timestamp);
+      }).join('');
+    }
 
     scrollToBottom();
     checkSafetyAcknowledgment();
@@ -1634,8 +1641,22 @@ function renderMessage(role, content, messageId, timestamp) {
   }
 }
 
+// The greeting an empty chat shows: the researcher's image (or a default icon)
+// above one line of text. Both are plain text from the server.
+function renderGreeting(greeting) {
+  var image = greeting.image_url
+    ? '<img src="' + escapeHtml(greeting.image_url) + '" alt="' + escapeHtml(greeting.alt || '') + '" class="h-24 w-24 rounded-full object-cover">'
+    : '<div class="flex h-14 w-14 items-center justify-center rounded-full bg-violet-50 text-cloze-indigo" aria-hidden="true">' +
+        '<svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></div>';
+  return '<div id="chatGreeting" class="flex h-full min-h-[16rem] flex-col items-center justify-center gap-4 px-6 text-center">' +
+    image + '<p class="max-w-md text-base text-stone-600">' + escapeHtml(greeting.text) + '</p></div>';
+}
+
 function addMessageToUI(role, content, messageId) {
   var container = document.getElementById('messagesContainer');
+  var greeting = document.getElementById('chatGreeting');
+  if (greeting) greeting.remove();
   var wrapper = document.createElement('div');
   wrapper.innerHTML = renderMessage(role, content, messageId);
   container.appendChild(wrapper.firstChild);

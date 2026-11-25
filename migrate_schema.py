@@ -56,6 +56,14 @@ COLUMN_ADDITIONS = [
     # FK linkage window→phase, for backfilling chats into already-generated
     # windows on always-available flows.
     ('chat_windows', 'phase_id', 'INTEGER'),
+    # Link from a participant's chat to the study-design chat it came from
+    # (filled in for existing chats after the tables are updated; see below).
+    ('chat_templates', 'flow_chat_id', 'INTEGER'),
+    # Chat greeting: researcher default and per-chat override.
+    ('provider_feature_flags', 'greeting_text', 'TEXT'),
+    ('provider_feature_flags', 'greeting_asset_id', 'INTEGER'),
+    ('flow_chats', 'greeting_text', 'TEXT'),
+    ('flow_chats', 'greeting_asset_id', 'INTEGER'),
 ]
 
 
@@ -142,7 +150,8 @@ def run_migration(apply=False):
 
     # ── Check for new tables (will be created by db.create_all) ──
     new_tables = ['safety_plans', 'audit_log', 'escalation_events', 'provider_feature_flags',
-                   'study_flows', 'flow_phases', 'flow_chats', 'flow_enrollments']
+                   'study_flows', 'flow_phases', 'flow_chats', 'flow_enrollments',
+                   'media_assets', 'media_renditions']
     print()
     for t in new_tables:
         if table_exists(cursor, t, db_type):
@@ -182,6 +191,17 @@ def run_migration(apply=False):
             print("Done. All tables up to date.")
         except Exception as e:
             sys.exit(f"db.create_all() failed: {e}")
+
+        # Participants' chats generated before chat_templates.flow_chat_id
+        # existed: link them to the study-design chat they came from.
+        print("\nLinking existing chats to their study-design chats...")
+        try:
+            from llm_chat.services.flow_links import link_templates_to_flow_chats
+            with app.app_context():
+                linked = link_templates_to_flow_chats()
+            print(f"Done. Linked {linked} chat(s).")
+        except Exception as e:
+            sys.exit(f"Linking chats failed: {e}")
 
 
 if __name__ == '__main__':

@@ -112,9 +112,16 @@ class ProviderFeatureFlags(db.Model):
     access_hours_timezone = db.Column(db.String(64), nullable=True)  # IANA, e.g. "America/New_York"
     access_hours_days = db.Column(db.Text, nullable=True)         # JSON list of weekday ints 0=Mon..6=Sun; NULL/empty = all days
 
+    # Greeting shown in an empty chat, unless the chat sets its own
+    # (FlowChat.greeting_*). See services/greeting.py.
+    greeting_text = db.Column(db.Text, nullable=True)
+    greeting_asset_id = db.Column(db.Integer, db.ForeignKey('media_assets.id', ondelete='SET NULL'),
+                                  nullable=True)
+
     created_at = db.Column(db.Float, default=lambda: time.time())
     updated_at = db.Column(db.Float, onupdate=lambda: time.time())
 
     # Relationships
     provider = db.relationship('User', foreign_keys=[provider_id])
     default_system_prompt = db.relationship('SystemPrompt', foreign_keys=[default_system_prompt_id])
+    greeting_asset = db.relationship('MediaAsset', foreign_keys=[greeting_asset_id])
