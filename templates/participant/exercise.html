@@ -108,6 +108,17 @@
         </button>
       </form>
 
+    {% elif state == "resting" %}
+      {% set hours = nav.opening_hours %}
+      <section aria-labelledby="dock-heading" class="flex items-start gap-4 rounded-[20px] bg-p-quiet px-5 py-5">
+        <span aria-hidden="true" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-p-waiting-soft text-p-waiting">{{ icon("moon", 20) }}</span>
+        <div class="flex min-w-0 flex-col gap-1">
+          <h2 id="dock-heading" class="text-lg font-semibold">Chat is resting{% if hours.reopen %} · {{ hours.reopen }}{% endif %}</h2>
+          <p class="text-[15px] leading-relaxed text-p-ink-3">Opening hours: {{ hours.schedule }}. You can still read this chat{{ " and your notebook" if notebook is not none }}.</p>
+          <p class="text-[15px] leading-relaxed text-p-ink-3">In a crisis, <a href="{{ url_for('participant.help_page') }}" data-help-open class="font-semibold text-p-help">get help now</a> or call or text 988.</p>
+        </div>
+      </section>
+
     {% elif state != "agree" %}
       <section aria-labelledby="dock-heading" class="flex flex-wrap items-start gap-4 rounded-[20px] border border-p-line bg-p-quiet px-5 py-5">
         <span aria-hidden="true" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full

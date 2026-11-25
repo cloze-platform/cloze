@@ -72,6 +72,8 @@ COLUMN_ADDITIONS = [
     # The page's id for a participant message, for retried sends (unique per
     # conversation; see INDEX_ADDITIONS).
     ('messages', 'client_message_id', 'VARCHAR(64)'),
+    # Closed hours on the new participant pages: 'lock' (NULL) or 'read_only'.
+    ('provider_feature_flags', 'access_hours_mode', 'VARCHAR(16)'),
 ]
 
 # ── Indexes on existing tables ───────────────────────────────────

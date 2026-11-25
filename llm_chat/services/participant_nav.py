@@ -370,9 +370,13 @@ def participant_reports_query(patient_id):
             .order_by(Report.generated_at.desc()))
 
 
+LOCK, READ_ONLY = "lock", "read_only"
+
+
 def opening_hours(provider_id):
     """The study's opening hours now: {"enabled": False}, or enabled with
-    open, schedule and reopen (see utils.access_hours.window_status)."""
+    open, schedule, reopen and reopens_at (see utils.access_hours.window_status)
+    and mode: lock or read_only (ProviderFeatureFlags.access_hours_mode)."""
     if not get_effective_setting("access_hours_enabled", provider_id, False):
         return {"enabled": False}
     start = get_effective_setting("access_hours_start", provider_id)
@@ -389,4 +393,11 @@ def opening_hours(provider_id):
     from ..utils.access_hours import window_status
     status = window_status(start, end, tz, days)
     status["enabled"] = True
+    mode = get_effective_setting("access_hours_mode", provider_id, LOCK)
+    status["mode"] = READ_ONLY if mode == READ_ONLY else LOCK
     return status
+
+
+def locked_out(hours):
+    """Closed, with the study set to show the resting screen instead of the site."""
+    return bool(hours.get("enabled") and not hours.get("open") and hours.get("mode") == LOCK)

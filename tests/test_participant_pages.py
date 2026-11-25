@@ -253,10 +253,11 @@ def test_no_safety_plan_step_when_the_study_has_none(study, login_as, v2, db):
     assert "step-heading" not in home and f'/exercise/template/{study["checkin"].id}"' in home
 
 
-def test_home_shows_closed_hours(study, login_as, v2, db, monkeypatch):
+def test_home_shows_closed_hours_in_read_only_mode(study, login_as, v2, db, monkeypatch):
     _approve_plan(db, study)
     db.session.add(ProviderFeatureFlags(provider_id=study["provider"].id, access_hours_enabled=True,
-                                        access_hours_start="09:00", access_hours_end="17:00"))
+                                        access_hours_start="09:00", access_hours_end="17:00",
+                                        access_hours_mode="read_only"))
     db.session.commit()
     from llm_chat.utils import access_hours
     monkeypatch.setattr(access_hours, "within_access_window", lambda *a, **k: False)

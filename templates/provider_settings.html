@@ -130,6 +130,16 @@
       </div>
       <label class="mt-3 mb-1 block text-xs font-medium text-stone-500 uppercase tracking-wide">Days available</label>
       <div id="accessHoursDays" class="flex flex-wrap gap-2"></div>
+      {% if participant_ui_v2 %}
+      <div class="mt-4">
+        <label for="accessHoursMode" class="mb-1 block text-xs font-medium text-stone-500 uppercase tracking-wide">Outside these hours</label>
+        <select id="accessHoursMode" class="rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-cloze-indigo focus:outline-none">
+          <option value="lock">Show the resting screen (participants can't use the site)</option>
+          <option value="read_only">Read-only (participants can read their chats, but can't reply)</option>
+        </select>
+        <p class="mt-1 text-xs text-stone-500">Get help now and the safety plan stay available either way.</p>
+      </div>
+      {% endif %}
       <div class="mt-4 flex items-center gap-3">
         <button onclick="saveAccessHours()" class="rounded-lg bg-cloze-indigo px-4 py-2 text-sm font-medium text-white hover:bg-cloze-hover">Save</button>
         <span id="accessSaveStatus" class="text-xs text-stone-400"></span>
@@ -358,6 +368,8 @@
         document.getElementById('accessHoursTimezone').value = myFlags.access_hours_timezone;
       }
       renderAccessDays(myFlags.access_hours_days || []);
+      var modeSelect = document.getElementById('accessHoursMode');
+      if (modeSelect) modeSelect.value = myFlags.access_hours_mode || 'lock';
 
       if (myFlags.allow_custom_prompts === false) {
         document.getElementById('promptsSection').classList.add('hidden');
@@ -897,13 +909,16 @@
     var dayBoxes = Array.prototype.slice.call(document.querySelectorAll('.access-day'));
     var checkedDays = dayBoxes.filter(function(b) { return b.checked; }).map(function(b) { return parseInt(b.value, 10); });
     var days = (checkedDays.length === 7) ? [] : checkedDays;  // all 7 = no restriction
-    _saveFlags({
+    var flags = {
       access_hours_enabled: document.getElementById('accessHoursEnabled').checked,
       access_hours_start: document.getElementById('accessHoursStart').value || null,
       access_hours_end: document.getElementById('accessHoursEnd').value || null,
       access_hours_timezone: document.getElementById('accessHoursTimezone').value || null,
       access_hours_days: days,
-    }, document.getElementById('accessSaveStatus'));
+    };
+    var modeSelect = document.getElementById('accessHoursMode');
+    if (modeSelect) flags.access_hours_mode = modeSelect.value;
+    _saveFlags(flags, document.getElementById('accessSaveStatus'));
   }
 
   function renderFlagsSummary() {

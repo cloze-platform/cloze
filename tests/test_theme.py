@@ -90,6 +90,8 @@ _READABLE_PAIRS = [
     ("done", "page"), ("done", "done-soft"),
     ("waiting", "waiting-soft"),
     ("help", "help-soft"), ("help", "page"),
+    ("night-ink", "night"), ("night-muted", "night"), ("night-muted", "night-raised"),
+    ("night-link", "night"), ("night-help", "night-raised"), ("night-help", "night-help-soft"),
 ]
 
 

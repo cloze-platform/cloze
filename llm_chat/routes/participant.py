@@ -14,7 +14,7 @@ from datetime import datetime
 from functools import wraps
 from zoneinfo import ZoneInfo
 
-from flask import Blueprint, abort, redirect, render_template, url_for
+from flask import Blueprint, abort, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from ..models import Message
@@ -22,8 +22,14 @@ from ..services import participant_nav
 from ..services.greeting import greeting_for
 from ..services.safety_info import DEFAULT_AGREEMENT, bold, safety_info
 from ..utils.participant_ui import uses_v2
+from ..utils.settings_resolution import get_provider_id_for_patient
 
 participant_bp = Blueprint("participant", __name__, url_prefix="")
+
+
+# Reachable while the study is closed in lock mode: safety content, and the
+# resting screen itself.
+OPEN_WHILE_CLOSED = {"participant.help_page", "participant.safety_plan", "participant.closed"}
 
 
 def participant_page(view):
@@ -32,8 +38,15 @@ def participant_page(view):
     def wrapped(*args, **kwargs):
         if not current_user.is_patient() or not uses_v2():
             abort(404)
+        if request.endpoint not in OPEN_WHILE_CLOSED and _locked_out():
+            return redirect(url_for("participant.closed"))
         return view(*args, **kwargs)
     return wrapped
+
+
+def _locked_out():
+    hours = participant_nav.opening_hours(get_provider_id_for_patient(current_user.id))
+    return participant_nav.locked_out(hours)
 
 
 def render_page(template, current=None, nav=None, **context):
@@ -44,6 +57,8 @@ def render_page(template, current=None, nav=None, **context):
 
 
 def render_home():
+    if _locked_out():
+        return redirect(url_for("participant.closed"))
     return render_page("participant/home.html", current="home")
 
 
@@ -98,6 +113,7 @@ def exercise_state(nav, ex):
       locked_plan   not started, and a required safety plan isn't approved
       upcoming      its group hasn't opened yet
       closed        its group closed before it was started
+      resting       outside opening hours (read-only mode): reading only
       agree         the safety information, before the first message
       open          replying"""
     if ex.state == participant_nav.FINISHED:
@@ -106,6 +122,8 @@ def exercise_state(nav, ex):
         return "locked_plan"
     if not ex.group.is_open:
         return "upcoming" if ex.group.is_upcoming else "closed"
+    if nav.opening_hours.get("enabled") and not nav.opening_hours.get("open"):
+        return "resting"
     if ex.conversation is None or not ex.conversation.consent_provided:
         return "agree"
     return "open"
@@ -122,6 +140,18 @@ def _render_exercise(nav, ex, messages):
         safety=safety_info(nav.provider_id) if state == "agree" else None, default_agreement=DEFAULT_AGREEMENT,
         notebook=participant_nav.notebook_entries(current_user.id) if nav.can_save else None,
     )
+
+
+@participant_bp.route("/closed")
+@participant_page
+def closed():
+    """The resting screen, while the study is closed in lock mode. Everything
+    else redirects here, except Get help now and the safety plan."""
+    hours = participant_nav.opening_hours(get_provider_id_for_patient(current_user.id))
+    if not participant_nav.locked_out(hours):
+        return redirect("/dashboard")
+    nav = participant_nav.build(current_user)
+    return render_template("participant/closed.html", nav=nav, hours=hours)
 
 
 # Placeholders until their pages land (stage 1, pull request 3).

@@ -98,9 +98,11 @@ def window_status(start_hhmm, end_hhmm, tz_name=None, days=None):
     schedule = f"{_days_label(days)}, {_fmt12(start_hhmm)} – {_fmt12(end_hhmm)} {tz_abbr}"
 
     reopen = None
+    reopens_at = None
     if not is_open:
         nxt = next_open(start_hhmm, tz_name, days)
         if nxt:
+            reopens_at = nxt.timestamp()
             if nxt.date() == now.date():
                 when = "today"
             elif nxt.date() == (now + timedelta(days=1)).date():
@@ -108,4 +110,4 @@ def window_status(start_hhmm, end_hhmm, tz_name=None, days=None):
             else:
                 when = nxt.strftime("%A")
             reopen = f"Opens {when} at {_fmt12(start_hhmm)}"
-    return {"open": is_open, "schedule": schedule, "reopen": reopen}
+    return {"open": is_open, "schedule": schedule, "reopen": reopen, "reopens_at": reopens_at}
