@@ -2,7 +2,7 @@ import json
 import re
 import time
 from datetime import datetime
-from flask import Blueprint, render_template, jsonify, request, abort, redirect, current_app
+from flask import Blueprint, render_template, jsonify, request, abort, redirect, current_app, url_for
 from flask_login import login_required, current_user
 from sqlalchemy.exc import IntegrityError
 from ..extensions import db
@@ -32,7 +32,11 @@ def user_dashboard():
     elif current_user.is_provider():
         return render_template("provider_dashboard.html")
     # Participants: the redesigned pages when the instance has switched to them.
+    # A link into today's page (/dashboard?conversation=<id>) opens the exercise.
     if uses_v2():
+        conversation_id = request.args.get('conversation', '')
+        if conversation_id.isdigit():
+            return redirect(url_for('participant.exercise', conversation_id=int(conversation_id)))
         return render_participant_home()
     return render_template("user_dashboard.html")
 
@@ -47,7 +51,7 @@ def new_conversation():
 @login_required
 def patient_reports():
     if current_user.is_patient():
-        return redirect('/dashboard')
+        return redirect('/reports' if uses_v2() else '/dashboard')
     return render_template("patient_reports.html")
 
 @conv_bp.route("/api/provider_settings")
@@ -97,8 +101,10 @@ def view_conversation(conversation_id):
     if not current_user.can_access_patient(conversation.user_id):
         abort(403)
 
-    # Patients use the unified dashboard
+    # Patients use the unified dashboard, or on v2 the exercise page
     if current_user.is_patient():
+        if uses_v2():
+            return redirect(url_for('participant.exercise', conversation_id=conversation_id))
         return redirect('/dashboard?conversation=' + str(conversation_id))
 
     can_send_messages = False
@@ -568,10 +574,33 @@ def get_selections():
     return jsonify([{
         'id': s.id,
         'text': s.selection_text,
+        # 'note' is the participant's note or, failing that, the conversation's
+        # title: today's pages read it as a label. The two separately:
         'note': s.note or conversation_titles.get(s.conversation_id) or f"Conversation {s.conversation_id}",
+        'own_note': s.note,
+        'conversation_title': conversation_titles.get(s.conversation_id),
         'conversation_id': s.conversation_id,
         'created_at': s.created_at
     } for s in selections])
+
+
+
+@conv_bp.route("/api/selections/<int:selection_id>", methods=["PUT"])
+@login_required
+def update_selection_note(selection_id):
+    """The participant's own note on a saved line. Only its owner can change it."""
+    selection = db.get_or_404(SavedSelection, selection_id)
+    if selection.user_id != current_user.id:
+        abort(403)
+    note = (request.json or {}).get('note')
+    if note is not None and not isinstance(note, str):
+        return jsonify({'error': 'note must be text'}), 400
+    note = (note or '').strip()
+    if len(note) > SavedSelection.NOTE_LIMIT:
+        return jsonify({'error': f'Notes can be up to {SavedSelection.NOTE_LIMIT} characters.'}), 400
+    selection.note = note or None
+    db.session.commit()
+    return jsonify({'status': 'success', 'id': selection.id, 'own_note': selection.note})
 
 @conv_bp.route("/api/selections/<int:selection_id>", methods=["DELETE"])
 @login_required

@@ -1,0 +1,75 @@
+{% extends "participant/base.html" %}
+{# Reports: the participant's reports, newest first, beside the one that's
+   open. A report's content is today's (UnifiedReportGenerator.render_html,
+   which escapes every piece of text it didn't write). groups maps a window
+   id to its menu group, for names and the way back to the conversation. #}
+
+{% block title %}Reports · Cloze{% endblock %}
+
+{% macro window_name(r) -%}
+  {%- set g = groups.get(r.window_id) -%}
+  {{- g.name if g else (r.window.phase_label or r.window.flow_name or r.window.title) -}}
+{%- endmacro %}
+
+{% block content %}
+<div class="mx-auto flex max-w-5xl flex-col gap-7 px-5 pb-14 pt-7 sm:px-8 lg:pt-12">
+  <header class="flex flex-col gap-2">
+    <h1 class="text-[32px] font-semibold leading-tight tracking-tight">Reports</h1>
+    <p class="max-w-xl text-base leading-relaxed text-p-ink-3">A short summary after each part of the study. Your care team can see these too.</p>
+  </header>
+
+  {% if not reports and not preparing %}
+    <section class="flex flex-col gap-2 rounded-[20px] bg-p-quiet px-6 py-6">
+      <h2 class="text-lg font-semibold">No reports yet</h2>
+      <p class="text-[15px] leading-relaxed text-p-ink-3">When a part of the study closes, a report about your chats in it appears here.</p>
+    </section>
+  {% else %}
+    <div class="flex flex-col gap-6 lg:flex-row lg:items-start">
+      <nav aria-label="Your reports" class="flex flex-col gap-1 lg:w-[280px] lg:shrink-0">
+        {% for r in reports %}
+          {% set on = report and r.id == report.id %}
+          <a href="{{ url_for('participant.reports', report_id=r.id) }}" {% if on %}aria-current="page"{% endif %}
+             class="flex flex-col gap-0.5 rounded-xl px-3.5 py-3 no-underline {{ 'bg-p-accent-soft' if on else 'hover:bg-p-raised' }}">
+            <span class="text-[15px] font-semibold text-p-ink">{{ window_name(r) }}</span>
+            <span class="text-[13px] text-p-hint">{{ r.generated_at|p_day(nav.timezone) }}</span>
+          </a>
+        {% endfor %}
+        {% for g in preparing %}
+          <div class="flex flex-col gap-0.5 rounded-xl px-3.5 py-3">
+            <span class="text-[15px] font-semibold text-p-ink-3">{{ g.name }}</span>
+            <span class="flex items-center gap-1.5 text-[13px] text-p-hint">{{ icon("clock", 14) }}Being prepared</span>
+          </div>
+        {% endfor %}
+      </nav>
+
+      {% if report %}
+        {% set g = groups.get(report.window_id) %}
+        {% set back = (g.exercises|selectattr("conversation")|first) if g else none %}
+        <article aria-labelledby="report-heading" class="flex min-w-0 flex-1 flex-col gap-5">
+          <header class="flex flex-wrap items-end justify-between gap-3">
+            <div class="flex flex-col gap-0.5">
+              <span class="text-[13px] text-p-hint">{{ report.generated_at|p_long(nav.timezone) }}</span>
+              <h2 id="report-heading" class="text-2xl font-semibold tracking-tight">{{ window_name(report) }}</h2>
+            </div>
+            <a href="/api/reports/download/{{ report.id }}/pdf" class="inline-flex min-h-10 items-center gap-2 rounded-[10px] border border-p-line-strong bg-p-surface px-3 text-sm font-semibold text-p-ink no-underline hover:bg-p-raised">
+              {{ icon("page", 16) }}Save as PDF
+            </a>
+          </header>
+          {# Today's report, on a light page in both colour modes: its styles assume one. #}
+          <div class="overflow-x-auto rounded-[20px] border border-p-line bg-white p-5 text-stone-900 sm:p-7">{{ report_html|safe }}</div>
+          <section class="flex items-start gap-3.5 rounded-[20px] bg-p-quiet px-5 py-5">
+            <span class="mt-0.5 text-p-ink-3">{{ icon("chat", 20) }}</span>
+            <div class="flex flex-col gap-0.5">
+              <h3 class="text-base font-semibold">Talk this through with your care team</h3>
+              <p class="text-[15px] text-p-ink-3">You could bring this report, or the lines you saved, to your next session.</p>
+            </div>
+          </section>
+          {% if back %}
+            <a href="{{ exercise_url(back) }}" class="inline-flex items-center gap-1.5 self-start text-[15px] font-semibold text-p-accent-ink">Read the conversation again{{ icon("arrow-right", 16, "", 2) }}</a>
+          {% endif %}
+        </article>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

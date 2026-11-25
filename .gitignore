@@ -46,6 +46,8 @@ htmlcov/
 # PDF/Report exports
 *.pdf
 report*.html
+# ...but templates are pages, not exports (templates/participant/reports.html)
+!templates/**/*.html
 
 # Docs
 .docs/

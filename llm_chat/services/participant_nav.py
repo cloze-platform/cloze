@@ -243,6 +243,17 @@ class Nav:
         return participant_reports_query(self.user.id).count() if self.reports_enabled else 0
 
     @cached_property
+    def preparing_reports(self):
+        """Closed groups whose report is still being made: the participant took
+        part, and no report exists yet."""
+        if not self.reports_enabled:
+            return []
+        done = {wid for (wid,) in participant_reports_query(self.user.id).with_entities(Report.window_id)}
+        return [g for g in self.groups
+                if g.status == "generating_report" and g.id not in done
+                and any(e.conversation for e in g.exercises)]
+
+    @cached_property
     def opening_hours(self):
         return opening_hours(self.provider_id)
 
@@ -353,9 +364,10 @@ def safety_plan_state(patient_id, provider_id):
 
 def notebook_entries(user_id, limit=50):
     """The participant's saved lines, newest first, each with the title of the
-    conversation it came from: [(SavedSelection, title)]."""
-    selections = (SavedSelection.query.filter_by(user_id=user_id)
-                  .order_by(SavedSelection.created_at.desc(), SavedSelection.id.desc()).limit(limit).all())
+    conversation it came from: [(SavedSelection, title)]. limit=None for all."""
+    query = (SavedSelection.query.filter_by(user_id=user_id)
+             .order_by(SavedSelection.created_at.desc(), SavedSelection.id.desc()))
+    selections = (query.limit(limit) if limit else query).all()
     ids = {s.conversation_id for s in selections}
     titles = dict(db.session.query(Conversation.id, Conversation.title).filter(Conversation.id.in_(ids)).all()) if ids else {}
     return [(s, titles.get(s.conversation_id) or "An exercise") for s in selections]

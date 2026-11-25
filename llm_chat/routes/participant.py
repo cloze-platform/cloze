@@ -10,6 +10,7 @@ only while the switch is v2. Anyone else gets 404, so on a v1 instance the
 pages don't exist.
 """
 
+import json
 from datetime import datetime
 from functools import wraps
 from zoneinfo import ZoneInfo
@@ -17,12 +18,12 @@ from zoneinfo import ZoneInfo
 from flask import Blueprint, abort, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from ..models import Message
+from ..models import Message, SafetyPlan, SavedSelection
 from ..services import participant_nav
 from ..services.greeting import greeting_for
 from ..services.safety_info import DEFAULT_AGREEMENT, bold, safety_info
 from ..utils.participant_ui import uses_v2
-from ..utils.settings_resolution import get_provider_id_for_patient
+from ..utils.settings_resolution import get_effective_setting, get_provider_id_for_patient
 
 participant_bp = Blueprint("participant", __name__, url_prefix="")
 
@@ -158,19 +159,83 @@ def closed():
 @participant_bp.route("/notebook")
 @participant_page
 def notebook():
-    return render_page("participant/placeholder.html", current="notebook", heading="Notebook")
+    """The participant's saved lines, grouped by the exercise they came from,
+    newest first, each with the participant's own note. 404 when the study
+    doesn't let participants save, as the menu leaves it out then."""
+    nav = participant_nav.build(current_user)
+    if not nav.can_save:
+        abort(404)
+    groups = {}
+    for selection, title in participant_nav.notebook_entries(current_user.id, limit=None):
+        group = groups.setdefault(selection.conversation_id, {
+            "title": title, "exercise": nav.exercise_for_conversation(selection.conversation_id), "lines": []})
+        group["lines"].append(selection)
+    return render_page("participant/notebook.html", current="notebook", nav=nav, groups=list(groups.values()),
+                       note_limit=SavedSelection.NOTE_LIMIT)
 
 
 @participant_bp.route("/safety-plan")
 @participant_page
 def safety_plan():
-    return render_page("participant/placeholder.html", current="safety_plan", heading="Safety plan")
+    """The participant's safety plan: their parts to add or change, and the
+    care team's parts to read. Saving goes through today's
+    /api/safety-plan/ endpoints (static/participant/safety-plan.js)."""
+    nav = participant_nav.build(current_user)
+    # One of each status; the oldest wins, as in /api/safety-plan/.
+    plans = {p.status: p for p in SafetyPlan.query.filter(
+        SafetyPlan.patient_id == current_user.id,
+        SafetyPlan.status.in_(("active", "pending_review", "draft"))).order_by(SafetyPlan.id.desc())}
+    active, pending, draft = plans.get("active"), plans.get("pending_review"), plans.get("draft")
+    state = nav.safety_plan.state
+    # What the page shows read-only, and what the form starts from.
+    shown = {"approved": active, "change_waiting": active, "waiting": pending}.get(state)
+    editing = {"your_turn": draft, "approved": active, "change_waiting": pending}.get(state)
+    care = (active or pending or draft)
+    return render_page(
+        "participant/safety_plan.html", current="safety_plan", nav=nav, state=state,
+        shown=shown.to_dict(for_patient=True) if shown else None,
+        editing=editing.to_dict(for_patient=True) if editing else None,
+        care=care.to_dict(for_patient=True) if care else None,
+        approved_at=active.approved_at if active else None,
+        sent_at=pending.updated_at if pending else None,
+        allow_avoid=bool(get_effective_setting("allow_patient_anti_patterns", nav.provider_id, True)),
+        ratings=PLAN_RATINGS,
+    )
+
+
+# The 1-5 scales the safety plan form asks about (the prompt reads them;
+# see prompts/composer.py). Labels as today's form, in plain words.
+PLAN_RATINGS = {
+    "severity": ["Mild", "Mild to moderate", "Moderate", "Moderate to severe", "Severe"],
+    "effectiveness": ["A little", "Somewhat", "Moderately", "A lot", "Very much"],
+    "comfort": ["Very low", "Low", "Moderate", "High", "Very high"],
+}
 
 
 @participant_bp.route("/reports")
+@participant_bp.route("/reports/<int:report_id>")
 @participant_page
-def reports():
-    return render_page("participant/placeholder.html", current="reports", heading="Reports")
+def reports(report_id=None):
+    """The participant's reports: a list, and one open (the newest unless
+    report_id says otherwise). Only their own summary reports from visible
+    windows, the same rule as /api/reports/. Report content is today's,
+    from the unified report generator. 404 when reports are off."""
+    nav = participant_nav.build(current_user)
+    if not nav.reports_enabled:
+        abort(404)
+    reports = participant_nav.participant_reports_query(current_user.id).all()
+    if report_id is None:
+        report = reports[0] if reports else None
+    else:
+        report = next((r for r in reports if r.id == report_id), None)
+        if report is None:
+            abort(404)
+    html = None
+    if report is not None:
+        from report.generator import UnifiedReportGenerator
+        html = UnifiedReportGenerator(report.window_id).render_html(json.loads(report.report_data or "{}"))
+    return render_page("participant/reports.html", current="reports", nav=nav, reports=reports, report=report,
+                       report_html=html, groups={g.id: g for g in nav.groups}, preparing=nav.preparing_reports)
 
 
 # ── Template helpers ──────────────────────────────────────────
