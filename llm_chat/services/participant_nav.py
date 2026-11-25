@@ -192,6 +192,18 @@ class Nav:
     def exercise_for_conversation(self, conversation_id):
         return next((e for e in self.exercises if e.conversation_id == conversation_id), None)
 
+    def focus_group(self, current_exercise=None):
+        """The group to open in the menu: the one holding the current exercise;
+        otherwise the open group with the most recently used exercise in
+        progress; otherwise the first open group with anything left to do."""
+        if current_exercise:
+            return next((g for g in self.groups if any(e.id == current_exercise for e in g.exercises)), None)
+        started = [e for g in self.open_groups for e in g.exercises if e.state == STARTED]
+        if started:
+            return max(started, key=lambda e: (e.conversation.updated_at or 0, e.conversation.id)).group
+        return next((g for g in self.menu_groups
+                     if g.is_open and any(e.state != FINISHED for e in g.exercises)), None)
+
     def locked(self, exercise):
         """Why the participant can't start this exercise now, or None."""
         if exercise.conversation is not None:
@@ -227,6 +239,16 @@ class Nav:
     @cached_property
     def opening_hours(self):
         return opening_hours(self.provider_id)
+
+    @cached_property
+    def active_plan(self):
+        """The approved safety plan, if any: Get help now shows its care team."""
+        return SafetyPlan.get_active_plan(self.user.id)
+
+    @cached_property
+    def timezone(self):
+        """The study's timezone, for dates on the participant's pages."""
+        return get_effective_setting("access_hours_timezone", self.provider_id, "America/New_York")
 
 
 def build(user, now=None):

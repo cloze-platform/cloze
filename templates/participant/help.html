@@ -1,0 +1,11 @@
+{% extends "participant/base.html" %}
+{# Get help now as a page. The menu opens the same content as a dialog. #}
+
+{% block title %}Get help now · Cloze{% endblock %}
+{% block help_dialog %}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-xl px-5 pb-12 pt-8 sm:px-8 lg:pt-14">
+  {% with heading_id = "help-heading" %}{% include "participant/_get_help.html" %}{% endwith %}
+</div>
+{% endblock %}

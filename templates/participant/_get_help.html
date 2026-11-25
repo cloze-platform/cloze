@@ -1,0 +1,48 @@
+{# Get help now: crisis lines, the care team from an approved safety plan,
+   and the participant's first coping strategy. Shown in the menu's dialog
+   and on /help. heading_id lets the dialog and the page label it. #}
+{% set plan = nav.active_plan %}
+{% set coping = (plan.get_coping_strategies() if plan else [])|selectattr("strategy")|list %}
+<div class="flex flex-col gap-5">
+  <div class="flex flex-col gap-3">
+    <span aria-hidden="true" class="flex h-12 w-12 items-center justify-center rounded-full bg-p-help-soft text-p-help">{{ icon("heart", 24, "", 1.9) }}</span>
+    <h2 id="{{ heading_id }}" class="text-2xl font-bold tracking-tight text-p-ink">Get help now</h2>
+    <p class="text-base leading-relaxed text-p-ink-3">If you are in crisis and need help right away, reach out to one of these. They're there any time.</p>
+  </div>
+
+  <ul class="flex flex-col gap-2" role="list">
+    {% for href, title, detail, symbol in [
+         ("tel:988", "Call or text 988", "Suicide & Crisis Lifeline", "phone"),
+         ("sms:741741?&body=HOME", "Text HOME to 741741", "Crisis Text Line", "chat"),
+         ("tel:911", "Call 911", "For an emergency", "alert"),
+       ] %}
+      <li>
+        <a href="{{ href }}" class="flex min-h-[60px] items-center gap-3.5 rounded-2xl border border-p-help-line bg-p-surface px-4 text-p-ink no-underline hover:bg-p-help-soft">
+          <span class="text-p-help">{{ icon(symbol, 20, "", 1.9) }}</span>
+          <span class="flex flex-col">
+            <span class="text-base font-semibold">{{ title }}</span>
+            <span class="text-[13px] text-p-ink-3">{{ detail }}</span>
+          </span>
+        </a>
+      </li>
+    {% endfor %}
+    {% for member in (plan.get_care_team() if plan else []) if member.name %}
+      <li class="flex min-h-[60px] items-start gap-3.5 rounded-2xl border border-p-line bg-p-surface px-4 py-3">
+        <span class="mt-0.5 text-p-ink-3">{{ icon("user", 20, "", 1.9) }}</span>
+        <span class="flex flex-col gap-0.5">
+          <span class="text-base font-semibold text-p-ink">{{ member.name }}{% if member.role %} <span class="font-normal text-p-ink-3">· {{ member.role }}</span>{% endif %}</span>
+          {% if member.contact_protocol %}<span class="text-[14px] leading-snug text-p-ink-3">{{ member.contact_protocol }}</span>{% endif %}
+          {% if member.after_hours %}<span class="text-[14px] leading-snug text-p-ink-3">After hours: {{ member.after_hours }}</span>{% endif %}
+        </span>
+      </li>
+    {% endfor %}
+  </ul>
+
+  {% if coping %}
+    <section aria-labelledby="{{ heading_id }}-plan" class="flex flex-col gap-2 rounded-2xl bg-p-quiet px-4 py-4">
+      <h3 id="{{ heading_id }}-plan" class="text-sm font-semibold text-p-ink-3">From your safety plan</h3>
+      <p class="text-base leading-relaxed text-p-ink">{{ coping[0].patient_language or coping[0].strategy }}</p>
+      <a href="{{ url_for('participant.safety_plan') }}" class="self-start text-[15px] font-semibold text-p-accent-ink">Open my safety plan</a>
+    </section>
+  {% endif %}
+</div>

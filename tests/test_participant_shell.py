@@ -31,6 +31,8 @@ def _render_shell(app):
     with app.test_request_context("/"):
         return render_template_string(
             '{% extends "participant/base.html" %}'
+            # The bare shell, as sign-in and closed-hours pages use it: no menu.
+            '{% block menu %}{% endblock %}{% block tabs %}{% endblock %}{% block help_dialog %}{% endblock %}'
             '{% block content %}<h1>Hello</h1>{{ icon("home") }}{% endblock %}'
         )
 

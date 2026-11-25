@@ -1,0 +1,125 @@
+{# The participant's exercises by group, for the computer menu (rail) and the
+   phone's Exercises page (page). Groups are <details>, so they open and close
+   without JavaScript. Needs nav, current and current_exercise (a template id). #}
+
+{% macro state_label(nav, ex) -%}
+  {%- if nav.locked(ex) == "safety_plan" -%}locked until your safety plan is approved
+  {%- elif nav.locked(ex) == "window" -%}{{ "closed" if ex.group.is_closed else "not open yet" }}
+  {%- elif ex.state == "finished" -%}finished
+  {%- elif ex.state == "started" -%}started
+  {%- else -%}not started{%- endif -%}
+{%- endmacro %}
+
+{% macro mark(nav, ex, size=16) -%}
+  {%- if nav.locked(ex) -%}{{ icon("lock", size - 1, "text-p-hint", 2) }}
+  {%- else -%}{{ status_icon(ex.state, size) }}{%- endif -%}
+{%- endmacro %}
+
+{% macro group_summary(nav, group) -%}
+  {%- set total = group.exercises|length -%}
+  {%- set finished = group.count("finished") -%}
+  {%- set started = group.count("started") -%}
+  {%- if group.is_upcoming -%}Opens {{ group.opens_at|p_day(nav.timezone) }}
+  {%- elif total and finished == total -%}All finished
+  {%- elif group.is_closed -%}Closed
+  {%- elif finished or started -%}
+    {{- [(finished ~ " finished") if finished, (started ~ " started") if started]|select|join(" · ") -}}
+  {%- else -%}{{ total }} exercise{{ "s" if total != 1 }}{%- endif -%}
+{%- endmacro %}
+
+{% macro progress(nav) -%}
+  {%- set started = nav.exercises|selectattr("state", "equalto", "started")|list|length -%}
+  {%- set finished = nav.exercises|selectattr("state", "equalto", "finished")|list|length -%}
+  {%- if started or finished %}{{ started }} started · {{ finished }} finished{% endif -%}
+{%- endmacro %}
+
+
+{% macro rail(nav, current_exercise=none) %}
+{% set focus = nav.focus_group(current_exercise) %}
+<div class="flex flex-col gap-0.5">
+  <div class="flex items-baseline justify-between px-2.5 pb-1.5">
+    <h2 class="text-[13px] font-semibold text-p-hint">Exercises</h2>
+    {% if nav.exercises %}<span class="text-xs text-p-hint">{{ progress(nav) }}</span>{% endif %}
+  </div>
+  {% if nav.safety_plan.blocks_starting and nav.exercises %}
+    <p class="px-2.5 pb-2 text-[13px] leading-snug text-p-hint">Open once your safety plan is approved</p>
+  {% endif %}
+  {% for group in nav.menu_groups if group.exercises %}
+    <details class="group/g" {% if focus and group.id == focus.id %}open{% endif %}>
+      <summary class="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-[10px] px-2.5 text-sm font-medium text-p-ink-2 hover:bg-p-raised [&::-webkit-details-marker]:hidden">
+        <span class="text-p-hint transition-transform group-open/g:rotate-90">{{ icon("chevron-right", 14, "", 2) }}</span>
+        <span class="min-w-0 flex-1 truncate">{{ group.name }}</span>
+        {% set total = group.exercises|length %}{% set finished = group.count("finished") %}
+        {% if total and finished == total %}
+          {{ status_icon("finished", 15) }}<span class="sr-only">, all finished</span>
+        {% elif group.is_upcoming %}
+          <span class="shrink-0 text-xs text-p-hint">Opens {{ group.opens_at|p_date(nav.timezone) }}</span>
+        {% else %}
+          <span class="shrink-0 text-[13px] tabular-nums text-p-hint" aria-hidden="true">{{ finished }}/{{ total }}</span>
+          <span class="sr-only">, {{ group_summary(nav, group) }}</span>
+        {% endif %}
+      </summary>
+      <ul class="pb-1" role="list">
+        {% for ex in group.exercises %}
+          {% set is_current = ex.id == current_exercise %}
+          <li>
+            {% if nav.locked(ex) %}
+              <span class="flex min-h-[38px] items-center gap-2.5 rounded-[10px] py-1 pl-8 pr-2.5 text-sm text-p-ink-3">
+                {{ mark(nav, ex) }}<span class="min-w-0 flex-1 truncate">{{ ex.title }}</span>
+                <span class="sr-only">, {{ state_label(nav, ex) }}</span>
+              </span>
+            {% else %}
+              <a href="{{ exercise_url(ex) }}" {% if is_current %}aria-current="page"{% endif %}
+                 class="flex min-h-[38px] items-center gap-2.5 rounded-[10px] py-1 pl-8 pr-2.5 text-sm no-underline {{ 'bg-p-surface font-semibold text-p-ink shadow-[0_0_0_1px_var(--p-line)]' if is_current else 'text-p-ink-2 hover:bg-p-raised' }}">
+                {{ mark(nav, ex) }}<span class="min-w-0 flex-1 truncate">{{ ex.title }}</span>
+                <span class="sr-only">, {{ state_label(nav, ex) }}</span>
+              </a>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </details>
+  {% else %}
+    <p class="px-2.5 text-[13px] leading-snug text-p-hint">Your exercises will appear here.</p>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+
+{% macro page(nav) %}
+{% set focus = nav.focus_group() %}
+<div class="flex flex-col gap-3">
+  {% for group in nav.menu_groups if group.exercises %}
+    <details class="group/g rounded-[18px] border border-p-line bg-p-surface" {% if focus and group.id == focus.id %}open{% endif %}>
+      <summary class="flex min-h-[62px] cursor-pointer list-none items-center gap-2.5 px-4 [&::-webkit-details-marker]:hidden">
+        <span class="flex min-w-0 flex-1 flex-col">
+          <span class="text-base font-semibold text-p-ink">{{ group.name }}</span>
+          <span class="text-[13px] text-p-hint">{{ group_summary(nav, group) }}</span>
+        </span>
+        <span class="text-p-hint transition-transform group-open/g:rotate-180">{{ icon("chevron-down", 18, "", 2) }}</span>
+      </summary>
+      <ul class="flex flex-col gap-1 px-2 pb-2" role="list">
+        {% for ex in group.exercises %}
+          <li>
+            {% if nav.locked(ex) %}
+              <span class="flex min-h-[48px] items-center gap-3 rounded-xl px-3 text-[15px] text-p-ink-3">
+                {{ mark(nav, ex, 18) }}<span class="min-w-0 flex-1">{{ ex.title }}</span>
+                <span class="text-[13px] text-p-hint">{{ "After your safety plan" if nav.locked(ex) == "safety_plan" else ("Closed" if group.is_closed else "Not open yet") }}</span>
+              </span>
+            {% else %}
+              <a href="{{ exercise_url(ex) }}" class="flex min-h-[48px] items-center gap-3 rounded-xl px-3 text-[15px] text-p-ink no-underline hover:bg-p-raised">
+                {{ mark(nav, ex, 18) }}<span class="min-w-0 flex-1">{{ ex.title }}</span>
+                <span class="text-[13px] font-semibold {{ 'text-p-done' if ex.state == 'finished' else 'text-p-accent-ink' }}">
+                  {{- {"finished": "Finished", "started": "Continue", "not_started": "Start"}[ex.state] -}}
+                </span>
+              </a>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </details>
+  {% else %}
+    <p class="rounded-[18px] bg-p-quiet px-5 py-6 text-[15px] text-p-ink-3">Your exercises will appear here when your study team adds them.</p>
+  {% endfor %}
+</div>
+{% endmacro %}

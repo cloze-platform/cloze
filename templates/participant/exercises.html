@@ -1,0 +1,17 @@
+{% extends "participant/base.html" %}
+{% from "participant/_exercises.html" import page, progress %}
+
+{% block title %}Exercises · Cloze{% endblock %}
+
+{% block content %}
+<div class="mx-auto flex max-w-2xl flex-col gap-5 px-5 pb-12 pt-7 sm:px-8 lg:pt-12">
+  <div class="flex flex-col gap-1">
+    <h1 class="text-[32px] font-semibold leading-tight tracking-tight text-p-ink">Exercises</h1>
+    {% if nav.exercises %}<p class="text-[15px] text-p-ink-3">{{ progress(nav) }}</p>{% endif %}
+    {% if nav.safety_plan.blocks_starting and nav.exercises %}
+      <p class="text-[15px] text-p-ink-3">These open once your care team approves your safety plan.</p>
+    {% endif %}
+  </div>
+  {{ page(nav) }}
+</div>
+{% endblock %}

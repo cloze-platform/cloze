@@ -1,15 +1,18 @@
 {# Shell for the redesigned participant pages (participant_ui = v2).
    Self-contained: it doesn't extend base.html, whose researcher and admin
    dark-mode overrides don't apply here. Pages fill the blocks:
-     menu     the study menu (computer rail, phone top bar and tabs)
+     menu     the study menu: computer rail and phone top bar (participant/_menu.html)
      content  the page itself, inside <main id="main">
      panel    an optional side panel beside the page
+     tabs     the phone's bottom tabs (participant/_tabs.html)
+   Pages rendered without a menu (sign in, closed hours) empty menu and tabs.
+   Menu pages need nav and current (see routes/participant.py render_page).
 #}
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>{% block title %}Cloze{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
@@ -26,12 +29,29 @@
   <div id="announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <div class="flex min-h-screen flex-col lg:flex-row">
-    {% block menu %}{% endblock %}
+    {% block menu %}{% include "participant/_menu.html" %}{% endblock %}
     <main id="main" tabindex="-1" class="min-w-0 flex-1 focus:outline-none">
       {% block content %}{% endblock %}
     </main>
     {% block panel %}{% endblock %}
+    {% block tabs %}{% include "participant/_tabs.html" %}{% endblock %}
   </div>
+
+  {% block help_dialog %}
+  {# Get help now, opened by any [data-help-open] link (static/participant/help.js).
+     Beside the page on a computer, a sheet from the bottom on a phone. #}
+  <dialog id="help-dialog" aria-labelledby="help-dialog-heading"
+          class="fixed inset-x-0 bottom-0 top-auto m-0 max-h-[88vh] w-full max-w-none overflow-y-auto rounded-t-[28px] bg-p-page p-0 text-p-ink shadow-2xl backdrop:bg-black/40 lg:inset-y-0 lg:left-auto lg:right-0 lg:h-full lg:max-h-none lg:w-[420px] lg:rounded-none lg:rounded-l-[28px]">
+    <div class="flex flex-col gap-2 px-6 pb-8 pt-4">
+      <div class="flex items-center justify-between">
+        <span aria-hidden="true" class="mx-auto h-1.5 w-10 rounded-full bg-p-line-strong lg:hidden"></span>
+        <button type="button" data-help-close class="ml-auto inline-flex min-h-11 items-center rounded-xl px-3 text-[15px] font-semibold text-p-accent-ink hover:bg-p-raised">Close</button>
+      </div>
+      {% with heading_id = "help-dialog-heading" %}{% include "participant/_get_help.html" %}{% endwith %}
+    </div>
+  </dialog>
+  <script src="{{ url_for('static', filename='participant/help.js') }}" defer></script>
+  {% endblock %}
 
   {% block scripts %}{% endblock %}
 </body>
