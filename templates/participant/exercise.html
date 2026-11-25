@@ -45,6 +45,13 @@
       {% if closes_soon and state in ("open", "agree") %}
         <span class="hidden sm:inline">Open until <time data-closes-at="{{ group.closes_at }}" datetime="{{ group.closes_at|p_iso }}">{{ group.closes_at|p_when(nav.timezone) }}</time></span>
       {% endif %}
+      {% if notebook is not none %}
+        <a href="{{ url_for('participant.notebook') }}" id="panel-toggle" aria-controls="panel"
+           class="inline-flex min-h-10 items-center gap-2 rounded-[10px] border border-p-line-strong bg-p-surface px-3 text-sm font-medium text-p-ink no-underline hover:bg-p-raised aria-expanded:bg-p-accent-soft aria-expanded:border-p-accent-line">
+          {{ icon("notebook", 16) }}<span class="hidden sm:inline">Notebook</span>
+          <span class="sr-only sm:not-sr-only text-p-hint" data-notebook-count>{{ notebook|length }}</span>
+        </a>
+      {% endif %}
       <a href="{{ url_for('participant.help_page') }}" data-help-open
          class="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-p-help-soft px-3 text-sm font-semibold text-p-help no-underline lg:hidden">
         {{ icon("heart", 16, "", 1.9) }}<span class="sr-only sm:not-sr-only">Get help now</span>
@@ -52,7 +59,8 @@
     </div>
   </header>
 
-  <div id="conversation" class="mx-auto flex w-full max-w-[700px] flex-1 flex-col gap-6 px-5 pb-6 pt-8 lg:px-6">
+  <div id="conversation" class="mx-auto flex w-full max-w-[700px] flex-1 flex-col gap-6 px-5 pb-6 pt-8 lg:px-6"
+       {% if exercise.conversation_id and notebook is not none %}data-save-to="{{ exercise.conversation_id }}"{% endif %}>
     {% if state == "agree" %}
       {% include "participant/_before_you_start.html" %}
     {% elif messages %}
@@ -146,9 +154,55 @@
 </div>
 {% endblock %}
 
+{% block panel %}
+{% if notebook is not none %}
+{# The side panel: beside the exercise on a computer, a sheet from the bottom
+   on a phone (static/participant/panel.js). Stage 1 has the Notebook only;
+   guides join it in stage 2. #}
+<div id="panel-backdrop" class="fixed inset-0 z-30 hidden bg-black/40 lg:hidden"></div>
+<aside id="panel" aria-labelledby="panel-heading" tabindex="-1"
+       class="fixed inset-x-0 bottom-0 z-40 hidden max-h-[85vh] flex-col overflow-y-auto rounded-t-[28px] bg-p-page shadow-2xl
+              lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:max-h-none lg:w-[380px] lg:shrink-0 lg:rounded-none lg:border-l lg:border-p-line lg:shadow-none">
+  <div class="flex items-center justify-between gap-2 border-b border-p-line py-2 pl-5 pr-2.5">
+    <span class="text-sm font-semibold text-p-ink">Notebook</span>
+    <button type="button" data-panel-close class="inline-flex h-10 w-10 items-center justify-center rounded-[10px] text-p-ink-3 hover:bg-p-raised">
+      {{ icon("close", 18, "", 2) }}<span class="sr-only">Close the notebook</span>
+    </button>
+  </div>
+  <div class="flex flex-col gap-3.5 px-6 pb-9 pt-6">
+    <div class="flex flex-col gap-1">
+      <h2 id="panel-heading" class="text-[23px] font-semibold tracking-tight">Notebook</h2>
+      <p class="text-[15px] text-p-ink-3">Lines you saved from your exercises. Select any line in the chat to save it here.</p>
+    </div>
+    <ul id="notebook-list" class="flex flex-col" role="list">
+      {% for selection, title in notebook %}
+        <li class="flex flex-col gap-1.5 border-t border-p-line py-4">
+          <p class="text-base leading-relaxed">“{{ selection.selection_text }}”</p>
+          <p class="text-[13px] text-p-hint">{{ title }} · {{ selection.created_at|p_ago(nav.timezone, nav.now) }}</p>
+        </li>
+      {% endfor %}
+    </ul>
+    <p id="notebook-empty" class="{{ 'hidden' if notebook else '' }} rounded-2xl bg-p-quiet px-4 py-4 text-[15px] text-p-ink-3">Nothing saved yet.</p>
+    <a href="{{ url_for('participant.notebook') }}" class="self-start text-[15px] font-semibold text-p-accent-ink">Open my notebook</a>
+  </div>
+</aside>
+
+{# Shown over selected text in the chat (static/participant/select-save.js). #}
+<div id="save-bar" role="toolbar" aria-label="Selected text" class="fixed z-40 hidden rounded-xl bg-p-ink p-1 shadow-[0_8px_24px_rgba(24,24,31,0.18)]">
+  <button type="button" id="save-button" class="inline-flex min-h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-p-page hover:bg-white/10">
+    {{ icon("notebook", 16) }}<span>Save to notebook</span>
+  </button>
+</div>
+{% endif %}
+{% endblock %}
+
 {% block scripts %}
 {% include "_markdown_scripts.html" %}
 <script src="{{ url_for('static', filename='js/shared.js') }}"></script>
 <script src="{{ url_for('static', filename='participant/exercise.js') }}"></script>
 {% if state == "open" %}<script src="{{ url_for('static', filename='participant/chat.js') }}"></script>{% endif %}
+{% if notebook is not none %}
+<script src="{{ url_for('static', filename='participant/panel.js') }}"></script>
+<script src="{{ url_for('static', filename='participant/select-save.js') }}"></script>
+{% endif %}
 {% endblock %}

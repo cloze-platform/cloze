@@ -120,6 +120,7 @@ def _render_exercise(nav, ex, messages):
         phone_bar=False, exercise=ex, group=ex.group, messages=messages, state=state, next_exercise=next_ex,
         greeting=greeting_for(ex.id, current_user) if not messages else None,
         safety=safety_info(nav.provider_id) if state == "agree" else None, default_agreement=DEFAULT_AGREEMENT,
+        notebook=participant_nav.notebook_entries(current_user.id) if nav.can_save else None,
     )
 
 
@@ -198,6 +199,22 @@ def p_bold(text):
 def is_list_item(line):
     """A '- ' line in a safety information block."""
     return line.strip().startswith("-")
+
+
+@participant_bp.app_template_filter("p_ago")
+def p_ago(timestamp, tz_name, now):
+    """'Just now', '5 min ago', 'Today 3:10 pm', 'Yesterday', or '3 Dec'."""
+    seconds = now - timestamp
+    if seconds < 60:
+        return "Just now"
+    if seconds < 3600:
+        return f"{int(seconds // 60)} min ago"
+    then, today = _local(timestamp, tz_name).date(), _local(now, tz_name).date()
+    if then == today:
+        return "Today " + p_when(timestamp, tz_name).split(" ", 1)[1]
+    if (today - then).days == 1:
+        return "Yesterday"
+    return p_date(timestamp, tz_name)
 
 
 @participant_bp.app_template_filter("p_iso")

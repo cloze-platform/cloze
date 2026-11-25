@@ -351,6 +351,16 @@ def safety_plan_state(patient_id, provider_id):
     return SafetyPlanState(required=True, state=state, sections_done=sections_done)
 
 
+def notebook_entries(user_id, limit=50):
+    """The participant's saved lines, newest first, each with the title of the
+    conversation it came from: [(SavedSelection, title)]."""
+    selections = (SavedSelection.query.filter_by(user_id=user_id)
+                  .order_by(SavedSelection.created_at.desc(), SavedSelection.id.desc()).limit(limit).all())
+    ids = {s.conversation_id for s in selections}
+    titles = dict(db.session.query(Conversation.id, Conversation.title).filter(Conversation.id.in_(ids)).all()) if ids else {}
+    return [(s, titles.get(s.conversation_id) or "An exercise") for s in selections]
+
+
 def participant_reports_query(patient_id):
     """The participant's own reports from visible windows, newest first. One
     per window: the summary report, not the detailed one."""

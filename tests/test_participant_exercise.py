@@ -211,3 +211,38 @@ def test_the_reply_box_only_when_replying_is_possible(study, login_as, v2, db):
     assert 'id="composer"' not in finished and "participant/chat.js" not in finished
     agree = client.get(_url(study["star_conv"])).get_data(as_text=True)
     assert 'id="composer"' not in agree
+
+
+# ── Side panel: the Notebook ──
+
+def test_the_notebook_panel_lists_saved_lines_escaped(study, login_as, v2, db):
+    from llm_chat.models import SavedSelection
+    _agreed(db, study["thoughts_conv"])
+    db.session.add_all([
+        SavedSelection(user_id=study["patient"].id, conversation_id=study["thoughts_conv"].id,
+                       selection_text="<b>a line</b> I liked", created_at=1_800_000_000 - 120),
+        SavedSelection(user_id=study["other"].id, conversation_id=study["thoughts_conv"].id,
+                       selection_text="someone else's line"),
+    ])
+    db.session.commit()
+    html = login_as(study["patient"]).get(_url(study["thoughts_conv"])).get_data(as_text=True)
+    panel = html[html.index('<aside id="panel"'):html.index("</aside>")]
+    assert "&lt;b&gt;a line&lt;/b&gt; I liked" in panel and "someone else" not in panel
+    assert "Thought records · 2 min ago" in panel
+    assert 'id="panel-toggle"' in html and 'data-notebook-count>1<' in html
+    assert f'data-save-to="{study["thoughts_conv"].id}"' in html
+    assert "participant/panel.js" in html and "participant/select-save.js" in html
+
+
+def test_no_notebook_when_saving_is_off(study, login_as, v2, db):
+    _agreed(db, study["thoughts_conv"])
+    db.session.add(AdminSettings(setting_name="users_can_save_selections", setting_value="false"))
+    db.session.commit()
+    html = login_as(study["patient"]).get(_url(study["thoughts_conv"])).get_data(as_text=True)
+    assert '<aside id="panel"' not in html and "panel-toggle" not in html and "data-save-to" not in html
+    assert "select-save.js" not in html
+
+
+def test_nothing_to_save_from_before_a_conversation_exists(study, login_as, v2, approved):
+    html = login_as(study["patient"]).get(f"/exercise/template/{study['checkin'].id}").get_data(as_text=True)
+    assert '<aside id="panel"' in html and "data-save-to" not in html
