@@ -7,6 +7,7 @@ from sqlalchemy import or_, and_
 from sqlalchemy.exc import IntegrityError
 from ..utils.decorators import role_required
 from ..utils.passwords import validate_password
+from ..utils.participant_ui import uses_v2
 from ..extensions import db
 from ..models import (User, Conversation, ProviderPatient, ProviderSettings,
                       ChatWindow, ChatTemplate, AuditLog, EscalationEvent, ProviderFeatureFlags, SystemPrompt,
@@ -384,7 +385,8 @@ def rename_patient(patient_id):
 @provider_bp.route("/provider/settings")
 @role_required('provider')
 def provider_settings_page():
-    return render_template("provider_settings.html")
+    # The closed-hours mode only affects the redesigned participant pages.
+    return render_template("provider_settings.html", participant_ui_v2=uses_v2())
 
 
 @provider_bp.route("/api/provider/my-flags", methods=['GET'])
@@ -411,6 +413,7 @@ def get_my_flags():
         'access_hours_end': flags.access_hours_end if flags else None,
         'access_hours_timezone': (flags.access_hours_timezone if flags else None) or 'America/New_York',
         'access_hours_days': _json_list(flags.access_hours_days if flags else None),
+        'access_hours_mode': (flags.access_hours_mode if flags else None) or 'lock',
         'greeting_text': flags.greeting_text if flags else None,
         'greeting_asset': flags.greeting_asset.to_dict() if (flags and flags.greeting_asset) else None,
     })
@@ -514,6 +517,12 @@ def update_my_flags():
             else:
                 setattr(flags, key, None)
 
+    if 'access_hours_mode' in data:
+        if data['access_hours_mode'] not in ('lock', 'read_only'):
+            db.session.rollback()
+            return jsonify({'error': "access_hours_mode must be 'lock' or 'read_only'"}), 400
+        flags.access_hours_mode = data['access_hours_mode']
+
     try:
         apply_greeting_fields(flags, data, current_user)
     except ValueError as e:
@@ -523,6 +532,7 @@ def update_my_flags():
     _log_provider_action('update_provider_content', 'provider_feature_flags', current_user.id,
                          {k: data[k] for k in data if k in editable
                           or k in ('guard_enabled', 'access_hours_enabled', 'guard_keywords', 'access_hours_days',
+                                   'access_hours_mode',
                                    'greeting_text', 'greeting_asset_id')})
     db.session.commit()
     return jsonify({'status': 'success'})

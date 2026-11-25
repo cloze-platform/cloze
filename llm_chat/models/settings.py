@@ -111,6 +111,10 @@ class ProviderFeatureFlags(db.Model):
     access_hours_end = db.Column(db.String(5), nullable=True)     # "17:30"
     access_hours_timezone = db.Column(db.String(64), nullable=True)  # IANA, e.g. "America/New_York"
     access_hours_days = db.Column(db.Text, nullable=True)         # JSON list of weekday ints 0=Mon..6=Sun; NULL/empty = all days
+    # Outside those hours, on the redesigned participant pages: 'lock' (NULL)
+    # shows the resting screen instead of the site; 'read_only' keeps reading
+    # open and pauses replying. Sending is refused in both.
+    access_hours_mode = db.Column(db.String(16), nullable=True)
 
     # Greeting shown in an empty chat, unless the chat sets its own
     # (FlowChat.greeting_*). See services/greeting.py.

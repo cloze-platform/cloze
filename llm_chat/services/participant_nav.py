@@ -16,8 +16,9 @@ The main rules:
 - Hidden templates don't exist either.
 - An exercise's conversation is the participant's first conversation for that
   window and template.
-- An exercise is Finished when its window has closed or it has used its last
-  turn; Started when it has messages; otherwise Not started.
+- An exercise is Finished when its conversation has ended (ended_at; see
+  services/conversation_end.py), Started when it has messages, otherwise Not
+  started. Reading a conversation whose window has ended records it as ended.
 """
 
 import json
@@ -30,6 +31,7 @@ from sqlalchemy import case, func
 from ..extensions import db
 from ..models import ChatTemplate, ChatWindow, Conversation, Message, Report, SafetyPlan, SavedSelection
 from ..utils.settings_resolution import get_effective_setting, get_provider_id_for_patient
+from .conversation_end import stamp_window_closed
 
 NOT_STARTED, STARTED, FINISHED = "not_started", "started", "finished"
 TURN_LIMIT, WINDOW_CLOSED = "turn_limit", "window_closed"
@@ -66,11 +68,13 @@ class Exercise:
 
     @property
     def end_reason(self):
-        """Why a finished exercise ended, or None. Worked out from the window
-        and the turn count; a sent message can't follow either, so the turn
-        limit, if reached, came first."""
+        """Why a finished exercise ended, or None. The recorded reason when
+        there is one (Conversation.end_reason). Otherwise the turn count: a
+        conversation already at the limit before reasons were recorded."""
         if self.conversation is None:
             return None
+        if self.conversation.ended_at is not None:
+            return self.conversation.end_reason
         if self.max_turns and self.turns_used >= self.max_turns:
             return TURN_LIMIT
         if self.group.is_closed:
@@ -261,11 +265,21 @@ def build(user, now=None):
 
     windows = (ChatWindow.query.filter_by(patient_id=user.id, visible=True)
                .order_by(ChatWindow.id).all())
+    conversations = user.conversations.order_by(Conversation.updated_at.desc()).all()
+
+    # Every conversation's window, hidden ones included. A conversation whose
+    # window has ended is recorded as finished the first time it's seen.
+    windows_by_id = {w.id: w for w in windows}
+    missing = {c.window_id for c in conversations if c.window_id and c.window_id not in windows_by_id}
+    if missing:
+        windows_by_id.update({w.id: w for w in ChatWindow.query.filter(ChatWindow.id.in_(missing))})
+    if [c for c in conversations if stamp_window_closed(c, windows_by_id.get(c.window_id), now)]:
+        db.session.commit()
+
     templates = (ChatTemplate.query
                  .filter(ChatTemplate.window_id.in_([w.id for w in windows]), ChatTemplate.visible.is_(True))
                  .order_by(ChatTemplate.window_id, ChatTemplate.order_index, ChatTemplate.id).all()
                  if windows else [])
-    conversations = user.conversations.order_by(Conversation.updated_at.desc()).all()
     counts = _message_counts([c.id for c in conversations])
 
     # An exercise's conversation: the first one for its window and template.
@@ -283,7 +297,7 @@ def build(user, now=None):
                                         turns_used=user_turns, max_turns=max_turns))
 
     return Nav(user=user, now=now, provider_id=provider_id, groups=list(groups.values()),
-               chats=_visible_chats(conversations, counts, now), max_turns=max_turns)
+               chats=_visible_chats(conversations, windows_by_id, counts, now), max_turns=max_turns)
 
 
 def _message_counts(conversation_ids):
@@ -297,12 +311,10 @@ def _message_counts(conversation_ids):
     return {cid: (total, int(user_turns or 0)) for cid, total, user_turns in rows}
 
 
-def _visible_chats(conversations, counts, now):
+def _visible_chats(conversations, windows, counts, now):
     """The participant's conversations, minus those in hidden windows and
     hidden ones with no messages. A conversation whose window was deleted
     keeps showing, without window details."""
-    window_ids = {c.window_id for c in conversations if c.window_id}
-    windows = {w.id: w for w in ChatWindow.query.filter(ChatWindow.id.in_(window_ids)).all()} if window_ids else {}
     chats = []
     for c in conversations:
         window = windows.get(c.window_id)
@@ -339,6 +351,16 @@ def safety_plan_state(patient_id, provider_id):
     return SafetyPlanState(required=True, state=state, sections_done=sections_done)
 
 
+def notebook_entries(user_id, limit=50):
+    """The participant's saved lines, newest first, each with the title of the
+    conversation it came from: [(SavedSelection, title)]."""
+    selections = (SavedSelection.query.filter_by(user_id=user_id)
+                  .order_by(SavedSelection.created_at.desc(), SavedSelection.id.desc()).limit(limit).all())
+    ids = {s.conversation_id for s in selections}
+    titles = dict(db.session.query(Conversation.id, Conversation.title).filter(Conversation.id.in_(ids)).all()) if ids else {}
+    return [(s, titles.get(s.conversation_id) or "An exercise") for s in selections]
+
+
 def participant_reports_query(patient_id):
     """The participant's own reports from visible windows, newest first. One
     per window: the summary report, not the detailed one."""
@@ -348,9 +370,13 @@ def participant_reports_query(patient_id):
             .order_by(Report.generated_at.desc()))
 
 
+LOCK, READ_ONLY = "lock", "read_only"
+
+
 def opening_hours(provider_id):
     """The study's opening hours now: {"enabled": False}, or enabled with
-    open, schedule and reopen (see utils.access_hours.window_status)."""
+    open, schedule, reopen and reopens_at (see utils.access_hours.window_status)
+    and mode: lock or read_only (ProviderFeatureFlags.access_hours_mode)."""
     if not get_effective_setting("access_hours_enabled", provider_id, False):
         return {"enabled": False}
     start = get_effective_setting("access_hours_start", provider_id)
@@ -367,4 +393,11 @@ def opening_hours(provider_id):
     from ..utils.access_hours import window_status
     status = window_status(start, end, tz, days)
     status["enabled"] = True
+    mode = get_effective_setting("access_hours_mode", provider_id, LOCK)
+    status["mode"] = READ_ONLY if mode == READ_ONLY else LOCK
     return status
+
+
+def locked_out(hours):
+    """Closed, with the study set to show the resting screen instead of the site."""
+    return bool(hours.get("enabled") and not hours.get("open") and hours.get("mode") == LOCK)

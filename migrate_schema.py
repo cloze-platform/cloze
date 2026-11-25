@@ -13,6 +13,7 @@ Works with both SQLite and PostgreSQL.
 import os
 import sys
 import sqlite3
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -64,6 +65,21 @@ COLUMN_ADDITIONS = [
     ('provider_feature_flags', 'greeting_asset_id', 'INTEGER'),
     ('flow_chats', 'greeting_text', 'TEXT'),
     ('flow_chats', 'greeting_asset_id', 'INTEGER'),
+    # Why a conversation ended (turn_limit, window_closed, ...). Conversations
+    # in windows that have already ended are marked after the update; see below.
+    ('conversations', 'ended_at', 'REAL'),
+    ('conversations', 'end_reason', 'VARCHAR(32)'),
+    # The page's id for a participant message, for retried sends (unique per
+    # conversation; see INDEX_ADDITIONS).
+    ('messages', 'client_message_id', 'VARCHAR(64)'),
+    # Closed hours on the new participant pages: 'lock' (NULL) or 'read_only'.
+    ('provider_feature_flags', 'access_hours_mode', 'VARCHAR(16)'),
+]
+
+# ── Indexes on existing tables ───────────────────────────────────
+# Format: (index_name, table_name, columns, unique). Created after the columns.
+INDEX_ADDITIONS = [
+    ('uq_messages_conversation_client', 'messages', 'conversation_id, client_message_id', True),
 ]
 
 
@@ -126,6 +142,15 @@ def column_exists(cursor, table_name, column_name, db_type):
         return cursor.fetchone() is not None
 
 
+def index_exists(cursor, index_name, db_type):
+    if db_type == 'sqlite':
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name=?", (index_name,))
+    else:
+        cursor.execute("SELECT indexname FROM pg_indexes WHERE schemaname='public' AND indexname=%s",
+                       (index_name,))
+    return cursor.fetchone() is not None
+
+
 def run_migration(apply=False):
     conn, db_type = get_connection()
     cursor = conn.cursor()
@@ -148,6 +173,16 @@ def run_migration(apply=False):
             changes.append(sql)
             print(f"  ADD   {table_name}.{col_name} ({col_type})")
 
+    # ── Check index additions (after the columns they cover) ──
+    for index_name, table_name, columns, unique in INDEX_ADDITIONS:
+        if not table_exists(cursor, table_name, db_type):
+            continue
+        if index_exists(cursor, index_name, db_type):
+            print(f"  OK    index {index_name} — already exists")
+        else:
+            changes.append(f"CREATE {'UNIQUE ' if unique else ''}INDEX {index_name} ON {table_name} ({columns})")
+            print(f"  ADD   index {index_name} on {table_name} ({columns})")
+
     # ── Check for new tables (will be created by db.create_all) ──
     new_tables = ['safety_plans', 'audit_log', 'escalation_events', 'provider_feature_flags',
                    'study_flows', 'flow_phases', 'flow_chats', 'flow_enrollments',
@@ -158,6 +193,18 @@ def run_migration(apply=False):
             print(f"  OK    table '{t}' — already exists")
         else:
             print(f"  NEW   table '{t}' — will be created by --apply")
+
+    # ── Conversations in windows that have already ended ─────
+    # (marked window_closed by --apply, after the columns exist)
+    if table_exists(cursor, 'conversations', db_type) and table_exists(cursor, 'chat_windows', db_type):
+        ended_filter = ("c.ended_at IS NULL AND " if column_exists(cursor, 'conversations', 'ended_at', db_type)
+                        else "")
+        cursor.execute(
+            "SELECT COUNT(*) FROM conversations c JOIN chat_windows w ON c.window_id = w.id "
+            f"WHERE {ended_filter}(w.end_date < {time.time()} "
+            "OR w.status IN ('generating_report', 'report_ready'))"
+        )
+        print(f"\n  {cursor.fetchone()[0]} conversation(s) in ended windows to mark as finished (window_closed)")
 
     # ── Apply or report ──────────────────────────────────────
     print()
@@ -202,6 +249,16 @@ def run_migration(apply=False):
             print(f"Done. Linked {linked} chat(s).")
         except Exception as e:
             sys.exit(f"Linking chats failed: {e}")
+
+        # Conversations whose chat window ended before ended_at existed.
+        print("\nMarking conversations in ended windows as finished...")
+        try:
+            from llm_chat.services.conversation_end import backfill_window_closed
+            with app.app_context():
+                marked = backfill_window_closed()
+            print(f"Done. Marked {marked} conversation(s).")
+        except Exception as e:
+            sys.exit(f"Marking ended conversations failed: {e}")
 
 
 if __name__ == '__main__':

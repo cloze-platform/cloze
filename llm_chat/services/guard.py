@@ -12,6 +12,7 @@ so a scan failure can never block a participant's chat.
 
 import json
 import re
+import time
 
 from flask import current_app
 
@@ -30,11 +31,33 @@ def _find_hits(text, keywords):
     return hits
 
 
-def scan_and_escalate(patient, conversation, text):
+def _already_escalated(patient_id, conversation_id, client_message_id):
+    """The event already raised for this message, if a send of it was retried
+    (same client_message_id). Retries come within minutes, so only the last
+    day's events are checked."""
+    recent = EscalationEvent.query.filter(
+        EscalationEvent.patient_id == patient_id,
+        EscalationEvent.event_type == "keyword_match",
+        EscalationEvent.created_at > time.time() - 86400,
+    ).all()
+    for event in recent:
+        try:
+            context = json.loads(event.context or "{}")
+        except (TypeError, ValueError):
+            continue
+        if (context.get("client_message_id") == client_message_id
+                and context.get("conversation_id") == conversation_id):
+            return event
+    return None
+
+
+def scan_and_escalate(patient, conversation, text, client_message_id=None):
     """Scan a participant message; escalate + notify on a keyword hit.
 
     Returns the created EscalationEvent, or None if nothing matched / Guard
-    is disabled for this patient's provider.
+    is disabled for this patient's provider. A message the page sent before
+    (same client_message_id, retried after its reply failed) is only
+    escalated once: the earlier event is returned and nobody is emailed again.
     """
     provider_id = get_provider_id_for_patient(patient.id)
     if not provider_id:
@@ -55,6 +78,11 @@ def scan_and_escalate(patient, conversation, text):
     if not hits:
         return None
 
+    if client_message_id:
+        earlier = _already_escalated(patient.id, conversation.id, client_message_id)
+        if earlier is not None:
+            return earlier
+
     event = EscalationEvent(
         event_type="keyword_match",
         severity="critical",
@@ -64,6 +92,7 @@ def scan_and_escalate(patient, conversation, text):
         context=json.dumps({
             "keywords": hits,
             "conversation_id": conversation.id,
+            "client_message_id": client_message_id,
             "snippet": text[:280],
         }),
     )

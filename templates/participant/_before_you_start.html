@@ -1,0 +1,73 @@
+{# Before you start: the safety information, agreed once per conversation
+   (as today). Agreeing starts the conversation if it hasn't been, records the
+   agreement, and opens the chat (static/participant/exercise.js).
+   safety is None (built-in text), {"blocks": [...]} or {"html": raw}. #}
+{% set blocks = safety.blocks if safety and safety.blocks else none %}
+{% set agreement = (blocks|selectattr("type", "equalto", "checkbox")|map(attribute="content")|first) if blocks else none %}
+
+<section aria-labelledby="before-heading" class="flex flex-col gap-6">
+  <div class="flex flex-col gap-2">
+    <p class="text-sm font-semibold text-p-accent-ink">Before you start</p>
+    <h2 id="before-heading" class="text-[28px] font-semibold leading-tight tracking-tight sm:text-[32px]">Important safety information</h2>
+  </div>
+
+  <div id="safety-text" class="flex flex-col gap-5 text-base leading-relaxed text-p-ink-2"
+       {% if safety and safety.html %}data-custom-html="{{ safety.html }}"{% endif %}>
+    {% if blocks %}
+      {% for block in blocks if block.type != "checkbox" %}
+        {% if block.type == "warning" %}
+          <section class="flex flex-col gap-2 rounded-[18px] bg-p-waiting-soft px-6 py-5 shadow-[inset_0_0_0_1px_var(--p-waiting-line)]">
+            <h3 class="text-lg font-semibold text-p-waiting">{{ (block.title or "Warning")|p_bold }}</h3>
+            {% set lines = (block.content or "").split("\n") %}
+            {% for line in lines if line.strip() and not line.strip().startswith("-") %}<p>{{ line|p_bold }}</p>{% endfor %}
+            {% if lines|select("list_item")|list %}
+              <ul class="flex list-disc flex-col gap-1.5 pl-5">
+                {% for line in lines|select("list_item") %}<li>{{ line.strip().lstrip("- ")|p_bold }}</li>{% endfor %}
+              </ul>
+            {% endif %}
+          </section>
+        {% elif block.type == "alert" %}
+          <section class="flex flex-col gap-2 rounded-[18px] bg-p-help-soft px-6 py-5">
+            <h3 class="text-lg font-semibold text-p-help">{{ (block.title or "Alert")|p_bold }}</h3>
+            <p>{{ block.content|p_bold }}</p>
+          </section>
+        {% else %}
+          <p>{{ block.content|p_bold }}</p>
+        {% endif %}
+      {% endfor %}
+    {% else %}
+      {# The built-in text: today's, in the new design. #}
+      <p>This conversation partner is designed for general discussion and support between your regular sessions. It is not a substitute for emergency services or crisis intervention.</p>
+      <section class="flex flex-col gap-3 rounded-[18px] bg-p-help-soft px-6 py-5">
+        <h3 class="text-lg font-semibold text-p-help">If you are in crisis</h3>
+        <p>If you are experiencing a mental health crisis, please:</p>
+        <ul class="flex list-disc flex-col gap-1.5 pl-5">
+          <li>Call or text <strong>988</strong> (Suicide &amp; Crisis Lifeline)</li>
+          <li>Call <strong>911</strong> for immediate emergency assistance</li>
+          <li>Contact your provider directly</li>
+        </ul>
+      </section>
+      <section class="flex flex-col gap-2 rounded-[18px] bg-p-waiting-soft px-6 py-5 shadow-[inset_0_0_0_1px_var(--p-waiting-line)]">
+        <h3 class="text-lg font-semibold text-p-waiting">Required reporting</h3>
+        <p>For your safety, if you express active suicidal or homicidal thoughts with specific means or plans, we are required to notify your provider and may contact local authorities.</p>
+      </section>
+      <p class="text-p-ink-3">This conversation partner is here to support you between sessions, but it cannot provide clinical treatment or emergency intervention.</p>
+    {% endif %}
+  </div>
+
+  <form id="agree-form" class="flex flex-col gap-4 border-t border-p-line pt-6"
+        data-template-id="{{ exercise.id }}" {% if exercise.conversation_id %}data-conversation-id="{{ exercise.conversation_id }}"{% endif %}>
+    <label class="flex cursor-pointer items-start gap-3.5 rounded-2xl bg-p-quiet px-4 py-4 text-base leading-relaxed">
+      <input type="checkbox" id="agree-check" class="mt-1 h-[22px] w-[22px] shrink-0 accent-[var(--p-accent)]">
+      <span>{{ (agreement or default_agreement)|p_bold }}</span>
+    </label>
+    <div class="flex flex-wrap items-center gap-3.5">
+      <button type="submit" id="agree-button" disabled
+              class="inline-flex min-h-[52px] items-center gap-2 rounded-[14px] bg-p-accent px-6 text-base font-semibold text-p-on-accent hover:bg-p-accent-hover disabled:cursor-not-allowed disabled:bg-p-raised disabled:text-p-hint">
+        Continue{{ icon("arrow-right", 18, "", 2) }}
+      </button>
+      <span id="agree-hint" class="text-sm text-p-ink-3">Tick the box above to continue.</span>
+    </div>
+    <p id="agree-error" role="alert" class="hidden rounded-xl bg-p-help-soft px-4 py-3 text-[15px] text-p-help"></p>
+  </form>
+</section>

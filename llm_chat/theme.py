@@ -130,9 +130,13 @@ def participant_tokens(theme):
     """(light, dark) dicts of participant colour tokens, without the --p- prefix."""
     p, hover = theme["primary"], theme["hover"]
     on_accent = _WHITE if contrast(_WHITE, p) >= 4.5 else _INK
+    night = _mix(p, 0.22, "#100E20")
     shared = {
         "accent": p, "accent-hover": hover, "on-accent": on_accent,
-        "night": _mix(p, 0.22, "#100E20"),  # the closed-hours page, the same in both modes
+        # The closed-hours page: dark in both modes.
+        "night": night, "night-raised": _mix(_WHITE, 0.07, night), "night-line": _mix(_WHITE, 0.16, night),
+        "night-ink": _WHITE, "night-muted": _mix(_WHITE, 0.76, night), "night-link": _mix(p, 0.28),
+        "night-help": "#FF9DB0", "night-help-soft": _mix("#FF9DB0", 0.16, night),
     }
     light = {
         **shared,

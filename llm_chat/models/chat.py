@@ -56,6 +56,15 @@ class Conversation(db.Model):
     consent_provided = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.Float, default=lambda: time.time())
     updated_at = db.Column(db.Float, onupdate=lambda: time.time())
+    # When and why the conversation ended; NULL while it can still go on.
+    # Recorded, not worked out each time: reports and exports read the reason,
+    # and some reasons (a researcher closing it) can't be worked out later.
+    # See services/conversation_end.py.
+    ended_at = db.Column(db.Float, nullable=True)
+    end_reason = db.Column(db.String(32), nullable=True)
+
+    TURN_LIMIT = 'turn_limit'          # the participant used the last turn
+    WINDOW_CLOSED = 'window_closed'    # its chat window ended
 
     messages = db.relationship(
         'Message',
@@ -79,6 +88,8 @@ class Conversation(db.Model):
             'consent_provided': self.consent_provided,
             'created_at': self.created_at,
             'updated_at': self.updated_at,
+            'ended_at': self.ended_at,
+            'end_reason': self.end_reason,
         }
         if include_messages:
             data['messages'] = [
@@ -95,6 +106,11 @@ class Conversation(db.Model):
 
 class Message(db.Model):
     __tablename__ = 'messages'
+    __table_args__ = (
+        # A page's id for a participant message, so a retried send returns the
+        # saved reply instead of sending twice (routes/conversations.py).
+        db.Index('uq_messages_conversation_client', 'conversation_id', 'client_message_id', unique=True),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     conversation_id = db.Column(db.Integer, db.ForeignKey('conversations.id'), nullable=False, index=True)
@@ -103,6 +119,7 @@ class Message(db.Model):
     timestamp = db.Column(db.Float, nullable=False, index=True)
     token_count = db.Column(db.Integer)
     response_time = db.Column(db.Float)
+    client_message_id = db.Column(db.String(64), nullable=True)
 
     def to_dict(self):
         return {

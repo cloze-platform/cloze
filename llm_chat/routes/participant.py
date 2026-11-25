@@ -14,13 +14,22 @@ from datetime import datetime
 from functools import wraps
 from zoneinfo import ZoneInfo
 
-from flask import Blueprint, abort, render_template
+from flask import Blueprint, abort, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
+from ..models import Message
 from ..services import participant_nav
+from ..services.greeting import greeting_for
+from ..services.safety_info import DEFAULT_AGREEMENT, bold, safety_info
 from ..utils.participant_ui import uses_v2
+from ..utils.settings_resolution import get_provider_id_for_patient
 
 participant_bp = Blueprint("participant", __name__, url_prefix="")
+
+
+# Reachable while the study is closed in lock mode: safety content, and the
+# resting screen itself.
+OPEN_WHILE_CLOSED = {"participant.help_page", "participant.safety_plan", "participant.closed"}
 
 
 def participant_page(view):
@@ -29,18 +38,27 @@ def participant_page(view):
     def wrapped(*args, **kwargs):
         if not current_user.is_patient() or not uses_v2():
             abort(404)
+        if request.endpoint not in OPEN_WHILE_CLOSED and _locked_out():
+            return redirect(url_for("participant.closed"))
         return view(*args, **kwargs)
     return wrapped
 
 
-def render_page(template, current=None, **context):
+def _locked_out():
+    hours = participant_nav.opening_hours(get_provider_id_for_patient(current_user.id))
+    return participant_nav.locked_out(hours)
+
+
+def render_page(template, current=None, nav=None, **context):
     """Render a participant page with the menu's data. current names the menu
     item to mark: home, notebook, safety_plan, reports, exercises or help."""
-    nav = participant_nav.build(current_user)
+    nav = nav or participant_nav.build(current_user)
     return render_template(template, nav=nav, current=current, **context)
 
 
 def render_home():
+    if _locked_out():
+        return redirect(url_for("participant.closed"))
     return render_page("participant/home.html", current="home")
 
 
@@ -60,6 +78,80 @@ def exercises():
     """Every group and exercise. The phone's Exercises tab; on a computer the
     menu shows the same list."""
     return render_page("participant/exercises.html", current="exercises")
+
+
+@participant_bp.route("/exercise/<int:conversation_id>")
+@participant_page
+def exercise(conversation_id):
+    """An exercise the participant has started (or opened): only their own
+    exercise's conversation, in a visible window. Anything else is 404."""
+    nav = participant_nav.build(current_user)
+    ex = nav.exercise_for_conversation(conversation_id)
+    if ex is None:
+        abort(404)
+    messages = ex.conversation.messages.order_by(Message.timestamp).all()
+    return _render_exercise(nav, ex, messages)
+
+
+@participant_bp.route("/exercise/template/<int:template_id>")
+@participant_page
+def exercise_template(template_id):
+    """An exercise not started yet. Agreeing to the safety information starts
+    its conversation (static/participant/exercise.js)."""
+    nav = participant_nav.build(current_user)
+    ex = nav.exercise_for_template(template_id)
+    if ex is None:
+        abort(404)
+    if ex.conversation is not None:
+        return redirect(url_for("participant.exercise", conversation_id=ex.conversation_id))
+    return _render_exercise(nav, ex, [])
+
+
+def exercise_state(nav, ex):
+    """What the bottom of the exercise screen shows:
+      finished      the conversation has ended (with its reason)
+      locked_plan   not started, and a required safety plan isn't approved
+      upcoming      its group hasn't opened yet
+      closed        its group closed before it was started
+      resting       outside opening hours (read-only mode): reading only
+      agree         the safety information, before the first message
+      open          replying"""
+    if ex.state == participant_nav.FINISHED:
+        return "finished"
+    if nav.locked(ex) == "safety_plan":
+        return "locked_plan"
+    if not ex.group.is_open:
+        return "upcoming" if ex.group.is_upcoming else "closed"
+    if nav.opening_hours.get("enabled") and not nav.opening_hours.get("open"):
+        return "resting"
+    if ex.conversation is None or not ex.conversation.consent_provided:
+        return "agree"
+    return "open"
+
+
+def _render_exercise(nav, ex, messages):
+    state = exercise_state(nav, ex)
+    later = ex.group.exercises[ex.group.exercises.index(ex) + 1:]
+    next_ex = next((e for e in later if e.state != participant_nav.FINISHED and not nav.locked(e)), None)
+    return render_page(
+        "participant/exercise.html", current="exercise", nav=nav, current_exercise=ex.id,
+        phone_bar=False, exercise=ex, group=ex.group, messages=messages, state=state, next_exercise=next_ex,
+        greeting=greeting_for(ex.id, current_user) if not messages else None,
+        safety=safety_info(nav.provider_id) if state == "agree" else None, default_agreement=DEFAULT_AGREEMENT,
+        notebook=participant_nav.notebook_entries(current_user.id) if nav.can_save else None,
+    )
+
+
+@participant_bp.route("/closed")
+@participant_page
+def closed():
+    """The resting screen, while the study is closed in lock mode. Everything
+    else redirects here, except Get help now and the safety plan."""
+    hours = participant_nav.opening_hours(get_provider_id_for_patient(current_user.id))
+    if not participant_nav.locked_out(hours):
+        return redirect("/dashboard")
+    nav = participant_nav.build(current_user)
+    return render_template("participant/closed.html", nav=nav, hours=hours)
 
 
 # Placeholders until their pages land (stage 1, pull request 3).
@@ -88,8 +180,8 @@ def exercise_url(exercise):
     """Where an exercise opens: its conversation, or the template when it
     hasn't been started (the first message starts it)."""
     if exercise.conversation_id:
-        return f"/exercise/{exercise.conversation_id}"
-    return f"/exercise/template/{exercise.id}"
+        return url_for("participant.exercise", conversation_id=exercise.conversation_id)
+    return url_for("participant.exercise_template", template_id=exercise.id)
 
 
 def _local(timestamp, tz_name):
@@ -119,6 +211,40 @@ def p_when(timestamp, tz_name):
     """'Fri 5:00 pm' in the study's timezone."""
     d = _local(timestamp, tz_name)
     return f"{d:%a} {d.hour % 12 or 12}:{d:%M} {'am' if d.hour < 12 else 'pm'}"
+
+
+@participant_bp.app_template_filter("p_long")
+def p_long(timestamp, tz_name):
+    """'Friday, 14 March' in the study's timezone."""
+    d = _local(timestamp, tz_name)
+    return f"{d:%A}, {d.day} {d:%B}"
+
+
+@participant_bp.app_template_filter("p_bold")
+def p_bold(text):
+    return bold(text)
+
+
+@participant_bp.app_template_test("list_item")
+def is_list_item(line):
+    """A '- ' line in a safety information block."""
+    return line.strip().startswith("-")
+
+
+@participant_bp.app_template_filter("p_ago")
+def p_ago(timestamp, tz_name, now):
+    """'Just now', '5 min ago', 'Today 3:10 pm', 'Yesterday', or '3 Dec'."""
+    seconds = now - timestamp
+    if seconds < 60:
+        return "Just now"
+    if seconds < 3600:
+        return f"{int(seconds // 60)} min ago"
+    then, today = _local(timestamp, tz_name).date(), _local(now, tz_name).date()
+    if then == today:
+        return "Today " + p_when(timestamp, tz_name).split(" ", 1)[1]
+    if (today - then).days == 1:
+        return "Yesterday"
+    return p_date(timestamp, tz_name)
 
 
 @participant_bp.app_template_filter("p_iso")

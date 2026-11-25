@@ -12,7 +12,7 @@
     {% if badge %}
       <span class="inline-flex min-h-[22px] items-center rounded-full bg-p-waiting-soft px-2 text-xs font-semibold text-p-waiting">{{ badge }}</span>
     {% elif count %}
-      <span class="text-[13px] text-p-hint">{{ count }}<span class="sr-only"> saved</span></span>
+      <span class="text-[13px] text-p-hint"><span data-notebook-count>{{ count }}</span><span class="sr-only"> saved</span></span>
     {% endif %}
   </a>
 {% endmacro %}
@@ -48,7 +48,8 @@
   </div>
 </nav>
 
-{# Phone: the top bar #}
+{# Phone: the top bar. Pages with their own phone header (the exercise) pass phone_bar=False. #}
+{% if phone_bar is not defined or phone_bar %}
 <header class="sticky top-0 z-30 flex h-[60px] shrink-0 items-center justify-between gap-2.5 border-b border-p-line bg-p-page pl-4 pr-3 lg:hidden">
   <a href="/dashboard" class="flex min-w-0 items-center gap-2.5 text-p-ink no-underline">
     <img src="/static/images/logo.svg" alt="" class="h-7 w-7 rounded-md">
@@ -64,3 +65,4 @@
     </a>
   </div>
 </header>
+{% endif %}

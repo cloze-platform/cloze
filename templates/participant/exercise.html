@@ -1,0 +1,219 @@
+{% extends "participant/base.html" %}
+{# An exercise: the header, the conversation, and at the bottom whatever the
+   state allows (routes/participant.py exercise_state): the reply box, or why
+   replying isn't possible. On a phone this page has its own header and no tabs. #}
+
+{% block title %}{{ exercise.title }} · Cloze{% endblock %}
+
+{% block head %}
+<style>
+  /* Model replies, rendered from Markdown in the browser (static/js/shared.js renderMarkdown). */
+  .p-prose > * + * { margin-top: 0.75em; }
+  .p-prose ul { list-style: disc; padding-left: 1.4em; }
+  .p-prose ol { list-style: decimal; padding-left: 1.4em; }
+  .p-prose li + li { margin-top: 0.25em; }
+  .p-prose a { color: var(--p-accent-ink); text-decoration: underline; }
+  .p-prose strong { font-weight: 650; }
+  .p-prose h1, .p-prose h2, .p-prose h3, .p-prose h4 { font-weight: 650; line-height: 1.3; }
+  .p-prose code { font-size: 0.9em; padding: 0.1em 0.35em; border-radius: 6px; background: var(--p-raised); }
+  .p-prose pre { padding: 0.8em 1em; border-radius: 12px; background: var(--p-raised); overflow-x: auto; }
+  .p-prose pre code { padding: 0; background: none; }
+  .p-prose blockquote { padding-left: 1em; border-left: 3px solid var(--p-line-strong); color: var(--p-ink-3); }
+  .p-prose table { border-collapse: collapse; } .p-prose th, .p-prose td { border: 1px solid var(--p-line); padding: 0.3em 0.6em; }
+  [data-md]:not([data-md-done]) { white-space: pre-wrap; }
+</style>
+{% endblock %}
+
+{% block tabs %}{% endblock %}
+
+{% block content %}
+{% set closes_soon = group.is_open and group.closes_at - nav.now < 30 * 86400 %}
+<div class="flex min-h-screen flex-col">
+
+  <header class="sticky top-0 z-20 flex min-h-[64px] items-center gap-2 border-b border-p-line bg-p-page px-3 py-2 lg:min-h-[68px] lg:px-6">
+    <a href="/dashboard" class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-p-ink-3 hover:bg-p-raised lg:hidden">
+      {{ icon("chevron-left", 22, "", 2) }}<span class="sr-only">Back to Home</span>
+    </a>
+    <div class="flex min-w-0 flex-1 flex-col">
+      <span class="truncate text-[13px] text-p-hint">{{ group.name }}</span>
+      <h1 class="truncate text-[17px] font-semibold tracking-tight lg:text-[19px]">{{ exercise.title }}</h1>
+    </div>
+    <div class="flex shrink-0 items-center gap-3.5 text-[13px] text-p-hint">
+      {% if state in ("open", "agree") and exercise.turns_left is not none %}
+        <span id="turns-left" class="hidden sm:inline">{{ exercise.turns_left }} turn{{ "s" if exercise.turns_left != 1 }} left</span>
+      {% endif %}
+      {% if closes_soon and state in ("open", "agree") %}
+        <span class="hidden sm:inline">Open until <time data-closes-at="{{ group.closes_at }}" datetime="{{ group.closes_at|p_iso }}">{{ group.closes_at|p_when(nav.timezone) }}</time></span>
+      {% endif %}
+      {% if notebook is not none %}
+        <a href="{{ url_for('participant.notebook') }}" id="panel-toggle" aria-controls="panel"
+           class="inline-flex min-h-10 items-center gap-2 rounded-[10px] border border-p-line-strong bg-p-surface px-3 text-sm font-medium text-p-ink no-underline hover:bg-p-raised aria-expanded:bg-p-accent-soft aria-expanded:border-p-accent-line">
+          {{ icon("notebook", 16) }}<span class="hidden sm:inline">Notebook</span>
+          <span class="sr-only sm:not-sr-only text-p-hint" data-notebook-count>{{ notebook|length }}</span>
+        </a>
+      {% endif %}
+      <a href="{{ url_for('participant.help_page') }}" data-help-open
+         class="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-p-help-soft px-3 text-sm font-semibold text-p-help no-underline lg:hidden">
+        {{ icon("heart", 16, "", 1.9) }}<span class="sr-only sm:not-sr-only">Get help now</span>
+      </a>
+    </div>
+  </header>
+
+  <div id="conversation" class="mx-auto flex w-full max-w-[700px] flex-1 flex-col gap-6 px-5 pb-6 pt-8 lg:px-6"
+       {% if exercise.conversation_id and notebook is not none %}data-save-to="{{ exercise.conversation_id }}"{% endif %}>
+    {% if state == "agree" %}
+      {% include "participant/_before_you_start.html" %}
+    {% elif messages %}
+      {% for m in messages %}
+        {% if m.role == "user" %}
+          <div class="flex flex-col items-end gap-1" data-message-id="{{ m.id }}">
+            <div class="max-w-[82%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-p-accent-soft px-4 py-2.5 text-base leading-relaxed">{{ m.content }}</div>
+            <time class="pr-1 text-xs text-p-hint" datetime="{{ m.timestamp|p_iso }}">{{ m.timestamp|p_when(nav.timezone) }}</time>
+          </div>
+        {% else %}
+          <div class="flex flex-col gap-1" data-message-id="{{ m.id }}">
+            <div class="p-prose text-base leading-[1.65]" data-md>{{ m.content }}</div>
+            <time class="text-xs text-p-hint" datetime="{{ m.timestamp|p_iso }}">{{ m.timestamp|p_when(nav.timezone) }}</time>
+          </div>
+        {% endif %}
+      {% endfor %}
+    {% elif state == "open" and greeting %}
+      <div id="greeting" class="flex flex-1 flex-col items-center justify-center gap-4 py-10 text-center">
+        {% if greeting.image_url %}
+          <img src="{{ greeting.image_url }}" alt="{{ greeting.alt }}" class="h-24 w-24 rounded-full object-cover">
+        {% else %}
+          <span aria-hidden="true" class="flex h-14 w-14 items-center justify-center rounded-full bg-p-accent-soft text-p-accent-ink">{{ icon("chat", 26) }}</span>
+        {% endif %}
+        <p class="max-w-md text-base text-p-ink-3">{{ greeting.text }}</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <div id="dock" class="sticky bottom-0 z-10 mx-auto w-full max-w-[700px] bg-p-page px-5 pb-[max(14px,env(safe-area-inset-bottom))] pt-2 lg:px-6">
+    {% if state == "open" %}
+      {% set few = exercise.turns_left is not none and exercise.turns_left <= 5 %}
+      <p id="few-turns" class="{{ 'flex' if few else 'hidden' }} mb-2.5 items-start gap-2.5 rounded-2xl bg-p-waiting-soft px-4 py-3 text-sm text-p-ink-2">
+        <span class="mt-0.5 text-p-waiting">{{ icon("clock", 16, "", 2) }}</span>
+        <span><strong class="font-semibold" data-few-turns-count>{{ exercise.turns_left }} turn{{ "s" if exercise.turns_left != 1 }} left in this exercise.</strong> When they're used up, you can still read everything here.</span>
+      </p>
+      {# The reply box: one line that grows as you type (static/participant/chat.js). #}
+      <form id="composer" data-conversation-id="{{ exercise.conversation_id }}"
+            class="flex items-end gap-2 rounded-[28px] border border-p-line-strong bg-p-surface py-1.5 pl-5 pr-1.5 shadow-[0_1px_2px_rgba(24,24,31,0.04),0_8px_24px_rgba(24,24,31,0.05)] focus-within:border-p-accent focus-within:shadow-[0_0_0_1px_var(--p-accent)]">
+        <label for="reply" class="sr-only">Your reply</label>
+        <textarea id="reply" name="message" rows="1" required autocomplete="off" placeholder="Write your reply…"
+                  class="max-h-48 min-w-0 flex-1 resize-none self-center border-0 bg-transparent py-2.5 text-base leading-normal text-p-ink outline-none placeholder:text-p-hint focus:outline-none focus-visible:outline-none"></textarea>
+        <button type="submit" id="send" aria-label="Send"
+                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-p-accent text-p-on-accent hover:bg-p-accent-hover disabled:cursor-not-allowed disabled:opacity-50">
+          {{ icon("send", 20, "", 2.2) }}
+        </button>
+      </form>
+
+    {% elif state == "resting" %}
+      {% set hours = nav.opening_hours %}
+      <section aria-labelledby="dock-heading" class="flex items-start gap-4 rounded-[20px] bg-p-quiet px-5 py-5">
+        <span aria-hidden="true" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-p-waiting-soft text-p-waiting">{{ icon("moon", 20) }}</span>
+        <div class="flex min-w-0 flex-col gap-1">
+          <h2 id="dock-heading" class="text-lg font-semibold">Chat is resting{% if hours.reopen %} · {{ hours.reopen }}{% endif %}</h2>
+          <p class="text-[15px] leading-relaxed text-p-ink-3">Opening hours: {{ hours.schedule }}. You can still read this chat{{ " and your notebook" if notebook is not none }}.</p>
+          <p class="text-[15px] leading-relaxed text-p-ink-3">In a crisis, <a href="{{ url_for('participant.help_page') }}" data-help-open class="font-semibold text-p-help">get help now</a> or call or text 988.</p>
+        </div>
+      </section>
+
+    {% elif state != "agree" %}
+      <section aria-labelledby="dock-heading" class="flex flex-wrap items-start gap-4 rounded-[20px] border border-p-line bg-p-quiet px-5 py-5">
+        <span aria-hidden="true" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full
+          {{ 'bg-p-done-soft text-p-done' if state == 'finished' and exercise.end_reason == 'completed' else 'bg-p-raised text-p-ink-3' }}">
+          {%- if state == "finished" and exercise.end_reason == "turn_limit" %}{{ icon("chat", 20) }}
+          {%- elif state in ("finished", "closed") %}{{ icon("calendar", 20) }}
+          {%- elif state == "upcoming" %}{{ icon("clock", 20) }}
+          {%- else %}{{ icon("lock", 20) }}{% endif -%}
+        </span>
+        <div class="flex min-w-0 flex-[1_1_240px] flex-col gap-1">
+          {% if state == "finished" and exercise.end_reason == "turn_limit" %}
+            {% set n = nav.max_turns or exercise.turns_used %}
+            <h2 id="dock-heading" class="text-lg font-semibold">That's all {{ n }} turn{{ "s" if n != 1 }} for this exercise</h2>
+            <p class="text-[15px] leading-relaxed text-p-ink-3">This exercise has a set number of turns, and you've used them all. Everything you wrote is still here to read.</p>
+          {% elif state == "finished" and exercise.end_reason == "window_closed" or state == "closed" %}
+            <h2 id="dock-heading" class="text-lg font-semibold">This exercise closed on {{ group.closes_at|p_long(nav.timezone) }}</h2>
+            <p class="text-[15px] leading-relaxed text-p-ink-3">It was open for a set time, which has now passed.{% if messages %} Everything you wrote is still here to read.{% endif %}</p>
+          {% elif state == "finished" %}
+            <h2 id="dock-heading" class="text-lg font-semibold">This exercise has ended</h2>
+            <p class="text-[15px] leading-relaxed text-p-ink-3">Everything you wrote is still here to read.</p>
+          {% elif state == "upcoming" %}
+            <h2 id="dock-heading" class="text-lg font-semibold">Opens {{ group.opens_at|p_long(nav.timezone) }}</h2>
+            <p class="text-[15px] leading-relaxed text-p-ink-3">This exercise is part of {{ group.name }}.</p>
+          {% else %}
+            <h2 id="dock-heading" class="text-lg font-semibold">This exercise opens once your safety plan is approved</h2>
+            <p class="text-[15px] leading-relaxed text-p-ink-3">Your care team reviews your safety plan before your exercises start.</p>
+          {% endif %}
+        </div>
+        <div class="flex w-full flex-wrap gap-2.5 sm:w-auto sm:flex-col sm:items-end">
+          {% if state == "finished" and next_exercise %}
+            <a href="{{ exercise_url(next_exercise) }}" class="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-p-accent px-4 text-[15px] font-semibold text-p-on-accent no-underline hover:bg-p-accent-hover">Next: {{ next_exercise.title }}{{ icon("arrow-right", 16, "", 2) }}</a>
+          {% elif state == "locked_plan" %}
+            <a href="{{ url_for('participant.safety_plan') }}" class="inline-flex min-h-11 items-center rounded-xl bg-p-accent px-4 text-[15px] font-semibold text-p-on-accent no-underline hover:bg-p-accent-hover">Go to my safety plan</a>
+          {% endif %}
+          <a href="/dashboard" class="inline-flex min-h-11 items-center rounded-xl px-3 text-[15px] font-semibold text-p-accent-ink no-underline hover:bg-p-raised">Back to Home</a>
+        </div>
+      </section>
+    {% endif %}
+
+    {% if state in ("open", "agree") %}
+      <p class="mt-2.5 text-center text-xs leading-normal text-p-hint">This AI tool does not provide therapy or medical treatment. If you are in crisis and need help right away, use <a href="{{ url_for('participant.help_page') }}" data-help-open class="font-semibold text-p-help">Get help now</a>, or call or text 988.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block panel %}
+{% if notebook is not none %}
+{# The side panel: beside the exercise on a computer, a sheet from the bottom
+   on a phone (static/participant/panel.js). Stage 1 has the Notebook only;
+   guides join it in stage 2. #}
+<div id="panel-backdrop" class="fixed inset-0 z-30 hidden bg-black/40 lg:hidden"></div>
+<aside id="panel" aria-labelledby="panel-heading" tabindex="-1"
+       class="fixed inset-x-0 bottom-0 z-40 hidden max-h-[85vh] flex-col overflow-y-auto rounded-t-[28px] bg-p-page shadow-2xl
+              lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:max-h-none lg:w-[380px] lg:shrink-0 lg:rounded-none lg:border-l lg:border-p-line lg:shadow-none">
+  <div class="flex items-center justify-between gap-2 border-b border-p-line py-2 pl-5 pr-2.5">
+    <span class="text-sm font-semibold text-p-ink">Notebook</span>
+    <button type="button" data-panel-close class="inline-flex h-10 w-10 items-center justify-center rounded-[10px] text-p-ink-3 hover:bg-p-raised">
+      {{ icon("close", 18, "", 2) }}<span class="sr-only">Close the notebook</span>
+    </button>
+  </div>
+  <div class="flex flex-col gap-3.5 px-6 pb-9 pt-6">
+    <div class="flex flex-col gap-1">
+      <h2 id="panel-heading" class="text-[23px] font-semibold tracking-tight">Notebook</h2>
+      <p class="text-[15px] text-p-ink-3">Lines you saved from your exercises. Select any line in the chat to save it here.</p>
+    </div>
+    <ul id="notebook-list" class="flex flex-col" role="list">
+      {% for selection, title in notebook %}
+        <li class="flex flex-col gap-1.5 border-t border-p-line py-4">
+          <p class="text-base leading-relaxed">“{{ selection.selection_text }}”</p>
+          <p class="text-[13px] text-p-hint">{{ title }} · {{ selection.created_at|p_ago(nav.timezone, nav.now) }}</p>
+        </li>
+      {% endfor %}
+    </ul>
+    <p id="notebook-empty" class="{{ 'hidden' if notebook else '' }} rounded-2xl bg-p-quiet px-4 py-4 text-[15px] text-p-ink-3">Nothing saved yet.</p>
+    <a href="{{ url_for('participant.notebook') }}" class="self-start text-[15px] font-semibold text-p-accent-ink">Open my notebook</a>
+  </div>
+</aside>
+
+{# Shown over selected text in the chat (static/participant/select-save.js). #}
+<div id="save-bar" role="toolbar" aria-label="Selected text" class="fixed z-40 hidden rounded-xl bg-p-ink p-1 shadow-[0_8px_24px_rgba(24,24,31,0.18)]">
+  <button type="button" id="save-button" class="inline-flex min-h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-p-page hover:bg-white/10">
+    {{ icon("notebook", 16) }}<span>Save to notebook</span>
+  </button>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% include "_markdown_scripts.html" %}
+<script src="{{ url_for('static', filename='js/shared.js') }}"></script>
+<script src="{{ url_for('static', filename='participant/exercise.js') }}"></script>
+{% if state == "open" %}<script src="{{ url_for('static', filename='participant/chat.js') }}"></script>{% endif %}
+{% if notebook is not none %}
+<script src="{{ url_for('static', filename='participant/panel.js') }}"></script>
+<script src="{{ url_for('static', filename='participant/select-save.js') }}"></script>
+{% endif %}
+{% endblock %}
