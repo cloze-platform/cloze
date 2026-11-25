@@ -2,8 +2,9 @@
 enumeration), account lockout, IP rate limiting, and logout gating."""
 
 
-def _login(client, username, password):
-    return client.post("/api/login", json={"username": username, "password": password})
+def _login(client, username, password, headers=None):
+    return client.post("/api/login", json={"username": username, "password": password},
+                       headers=headers)
 
 
 def test_login_page_renders(client):
@@ -51,6 +52,28 @@ def test_ip_rate_limit_after_ten_attempts(client, make_user):
     for _ in range(10):
         assert _login(client, "ghost", "bad").status_code == 401
     assert _login(client, "ghost", "bad").status_code == 429
+
+
+def test_successful_logins_do_not_use_up_the_ip_limit(client, make_user):
+    """Many participants signing in from one clinic network must not trip the
+    limiter: only failed attempts count."""
+    make_user("p1", role="user", password="pw-12345")
+    for _ in range(15):
+        assert _login(client, "p1", "pw-12345").status_code == 200
+
+
+def test_ip_limit_keys_on_the_forwarded_client_address(client):
+    """Behind Cloudflare every request comes from a Cloudflare address. The
+    limiter must use the client address the proxy appends (the last
+    X-Forwarded-For entry), not the proxy's, and not a value the client made up."""
+    for i in range(10):
+        spoofed = {"X-Forwarded-For": f"10.0.0.{i}, 203.0.113.7"}
+        assert _login(client, "ghost", "bad", headers=spoofed).status_code == 401
+    limited = _login(client, "ghost", "bad", headers={"X-Forwarded-For": "203.0.113.7"})
+    assert limited.status_code == 429
+    # Another client behind the same proxy is unaffected.
+    other = _login(client, "ghost", "bad", headers={"X-Forwarded-For": "198.51.100.20"})
+    assert other.status_code == 401
 
 
 def test_logout_requires_authentication(client):

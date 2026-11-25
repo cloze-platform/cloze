@@ -7,10 +7,19 @@ Detailed mode uses academic publication-style formatting.
 """
 
 from datetime import datetime
+from html import escape
 from typing import Dict, Any
 
 from report.base import Renderer
 from report.styles import get_html_styles
+
+
+
+def _e(value) -> str:
+    """Escape a value for HTML. Report text comes from participants (saved
+    selections), providers (window titles), admins (model names) and models
+    (summaries, themes); the result is shown in browsers and rendered to PDF."""
+    return escape("" if value is None else str(value))
 
 
 class HTMLRenderer(Renderer):
@@ -62,7 +71,7 @@ class HTMLRenderer(Renderer):
 
         if 'components' in report_data:
             for component_name, component_data in report_data['components'].items():
-                html_parts.append(f'<div class="report-section" data-component="{component_name}">')
+                html_parts.append(f'<div class="report-section" data-component="{_e(component_name)}">')
                 html_parts.append(self.render_component(component_name, component_data, report_type))
                 html_parts.append('</div>')
 
@@ -81,7 +90,7 @@ class HTMLRenderer(Renderer):
             <html>
             <head>
                 <meta charset="UTF-8">
-                <title>Report - {report_data.get('window_title', 'Chat Session')}</title>
+                <title>Report - {_e(report_data.get('window_title', 'Chat Session'))}</title>
                 <style>{css}</style>
             </head>
             <body>
@@ -110,7 +119,7 @@ class HTMLRenderer(Renderer):
         # Build models display
         models_html = ""
         if models_used:
-            model_list = ", ".join([f"{name} ({info['provider']})" for name, info in models_used.items()])
+            model_list = ", ".join([f"{_e(name)} ({_e(info['provider'])})" for name, info in models_used.items()])
             models_html = f"""
                 <div class="meta-item">
                     <div class="meta-label">Models Used</div>
@@ -120,9 +129,9 @@ class HTMLRenderer(Renderer):
 
         return f"""
         <div class="report-header">
-            <h2>{report_data.get('window_title', 'Chat Session Report')}</h2>
+            <h2>{_e(report_data.get('window_title', 'Chat Session Report'))}</h2>
             <p class="report-type-badge report-type-{report_type}">{report_type_label}</p>
-            {f'<p class="window-description">{report_data.get("window_description")}</p>' if report_data.get('window_description') else ''}
+            {f'<p class="window-description">{_e(report_data.get("window_description"))}</p>' if report_data.get('window_description') else ''}
             <div class="report-meta">
                 <div class="meta-item">
                     <div class="meta-label">Generated</div>
@@ -170,7 +179,7 @@ class HTMLRenderer(Renderer):
         elif component_name == 'cooccurrence_analysis':
             return self._render_cooccurrence_analysis(data)
         else:
-            return f'<p>Unknown component: {component_name}</p>'
+            return f'<p>Unknown component: {_e(component_name)}</p>'
 
     def _render_ai_summary(self, data: Dict[str, Any]) -> str:
         """Render AI summary component (summary mode)."""
@@ -192,7 +201,7 @@ class HTMLRenderer(Renderer):
                     <ul class="themes-list-simple">
             """
             for theme in data['themes']:
-                html += f"<li>{theme}</li>"
+                html += f"<li>{_e(theme)}</li>"
             html += "</ul></div>"
 
         if data.get('progress_notes'):
@@ -205,7 +214,7 @@ class HTMLRenderer(Renderer):
             """
 
         html += f"""
-            <p class="generated-by">Generated with {data.get('generated_with', 'AI')}</p>
+            <p class="generated-by">Generated with {_e(data.get('generated_with', 'AI'))}</p>
         </div>
         """
         return html
@@ -223,9 +232,9 @@ class HTMLRenderer(Renderer):
             for selection in data['selections']:
                 html += f"""
                 <div class="saved-message">
-                    <p class="message-text">"{selection['text']}"</p>
-                    {f'<p class="message-note">Note: {selection["note"]}</p>' if selection.get('note') else ''}
-                    <p class="message-date">{selection['created_at_formatted']}</p>
+                    <p class="message-text">"{_e(selection['text'])}"</p>
+                    {f'<p class="message-note">Note: {_e(selection["note"])}</p>' if selection.get('note') else ''}
+                    <p class="message-date">{_e(selection['created_at_formatted'])}</p>
                 </div>
                 """
         else:
@@ -372,7 +381,7 @@ class HTMLRenderer(Renderer):
         if data.get('error'):
             html += f"""
                 <div class="error-message">
-                    <p>Error generating co-occurrence analysis: {data['error']}</p>
+                    <p>Error generating co-occurrence analysis: {_e(data['error'])}</p>
                 </div>
             """
         elif data.get('total_unique_words', 0) == 0:
@@ -424,7 +433,7 @@ class HTMLRenderer(Renderer):
                 for word_data in data['top_words'][:10]:
                     html += f"""
                         <div class="word-item">
-                            <span class="word-text">{word_data['word']}</span>
+                            <span class="word-text">{_e(word_data['word'])}</span>
                             <span class="word-count">{word_data['count']}</span>
                         </div>
                     """
@@ -454,7 +463,7 @@ class HTMLRenderer(Renderer):
         elif component_name == 'cooccurrence_analysis':
             return self._render_cooccurrence_analysis_academic(data)
         else:
-            return f'<p>Unknown component: {component_name}</p>'
+            return f'<p>Unknown component: {_e(component_name)}</p>'
 
     def _render_academic_header(self, report_data: Dict[str, Any]) -> str:
         """Render academic-style report header."""
@@ -469,14 +478,14 @@ class HTMLRenderer(Renderer):
 
         model_list = ""
         if models_used:
-            model_list = ", ".join([f"{name} ({info['provider']})"
+            model_list = ", ".join([f"{_e(name)} ({_e(info['provider'])})"
                                     for name, info in models_used.items()])
 
         return f"""
         <div class="report-header">
-            <h2>{report_data.get('window_title', 'Conversation Analysis Report')}</h2>
+            <h2>{_e(report_data.get('window_title', 'Conversation Analysis Report'))}</h2>
             <p class="report-type-badge">Detailed Analysis Report</p>
-            {f'<p class="window-description">{report_data.get("window_description")}</p>'
+            {f'<p class="window-description">{_e(report_data.get("window_description"))}</p>'
              if report_data.get('window_description') else ''}
             <div class="report-meta">
                 <p>Generated: {generated_date} &nbsp;|&nbsp;
@@ -508,7 +517,7 @@ class HTMLRenderer(Renderer):
         if data.get('themes'):
             html += '<div class="themes-section"><h4>Key Themes</h4><ul class="themes-list-simple">'
             for theme in data['themes']:
-                html += f"<li>{theme}</li>"
+                html += f"<li>{_e(theme)}</li>"
             html += "</ul></div>"
 
         if data.get('progress_notes'):
@@ -521,7 +530,7 @@ class HTMLRenderer(Renderer):
             """
 
         html += f"""
-                <p class="generated-by">Generated with {data.get('generated_with', 'AI')}</p>
+                <p class="generated-by">Generated with {_e(data.get('generated_with', 'AI'))}</p>
             </div>
         </div>
         """
@@ -713,7 +722,7 @@ class HTMLRenderer(Renderer):
         """
 
         if data.get('error'):
-            html += f'<p class="interpretive-text">Error: {data["error"]}</p>'
+            html += f'<p class="interpretive-text">Error: {_e(data["error"])}</p>'
         elif data.get('total_unique_words', 0) == 0:
             html += '<p class="interpretive-text">Insufficient data for co-occurrence analysis.</p>'
         else:
@@ -754,7 +763,7 @@ class HTMLRenderer(Renderer):
                     html += f"""
                         <tr>
                             <td>{rank}</td>
-                            <td>{word_data['word']}</td>
+                            <td>{_e(word_data['word'])}</td>
                             <td>{word_data['count']}</td>
                         </tr>
                     """
@@ -782,10 +791,10 @@ class HTMLRenderer(Renderer):
             for i, selection in enumerate(data['selections'], 1):
                 html += f"""
                 <div class="saved-message">
-                    <p class="message-text">[{i}] \"{selection['text']}\"</p>
-                    {f'<p class="message-note">Note: {selection["note"]}</p>'
+                    <p class="message-text">[{i}] \"{_e(selection['text'])}\"</p>
+                    {f'<p class="message-note">Note: {_e(selection["note"])}</p>'
                      if selection.get('note') else ''}
-                    <p class="message-date">{selection['created_at_formatted']}</p>
+                    <p class="message-date">{_e(selection['created_at_formatted'])}</p>
                 </div>
                 """
         else:
@@ -887,7 +896,7 @@ class HTMLRenderer(Renderer):
             return ""
 
         # Split text into sentences (rough approximation)
-        sentences = re.split(r'(?<=[.!?])\s+', text)
+        sentences = re.split(r'(?<=[.!?])\s+', str(text))
 
         # Group sentences into paragraphs (roughly 3-4 sentences per paragraph)
         paragraphs = []
@@ -909,6 +918,6 @@ class HTMLRenderer(Renderer):
             paragraphs.append(' '.join(current_para))
 
         # Convert to HTML paragraphs
-        html_paragraphs = [f'<p>{para}</p>' for para in paragraphs if para.strip()]
+        html_paragraphs = [f'<p>{_e(para)}</p>' for para in paragraphs if para.strip()]
 
         return '\n'.join(html_paragraphs)

@@ -11,7 +11,7 @@ CONFIG_VARS = (
     "FLASK_ENV", "SECRET_KEY", "DATABASE_URL", "CLOZE_PUBLIC_URL",
     "CLOZE_GUARD_SENDER", "AWS_SES_REGION", "CLOZE_GUARD_AWS_PROFILE",
     "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "OLLAMA_HOST",
-    "CLOZE_REPORTS_ENABLED",
+    "CLOZE_REPORTS_ENABLED", "CLOZE_PROXY_HOPS",
 )
 
 
@@ -80,6 +80,20 @@ def test_reports_switch_rejects_typos(clean_env):
         load_config()
 
 
+@pytest.mark.parametrize("raw, expected", [(None, 1), ("0", 0), ("2", 2)])
+def test_proxy_hops_parsing(clean_env, raw, expected):
+    if raw is not None:
+        clean_env.setenv("CLOZE_PROXY_HOPS", raw)
+    assert load_config()["CLOZE_PROXY_HOPS"] == expected
+
+
+@pytest.mark.parametrize("raw", ["-1", "one", "1.5"])
+def test_proxy_hops_rejects_non_counts(clean_env, raw):
+    clean_env.setenv("CLOZE_PROXY_HOPS", raw)
+    with pytest.raises(ConfigError, match="CLOZE_PROXY_HOPS"):
+        load_config()
+
+
 # --- Production checks ---------------------------------------------------------
 
 def test_valid_production_config(clean_env):
@@ -115,6 +129,16 @@ def test_production_guard_email_needs_public_url(clean_env):
 
     clean_env.setenv("CLOZE_PUBLIC_URL", "https://cloze.example.org")
     assert load_config()["CLOZE_GUARD_SENDER"] == "noreply@cloze.example.org"
+
+
+def test_api_docs_are_not_served_in_production(clean_env):
+    from llm_chat import create_app
+
+    assert create_app().test_client().get("/openapi.json").status_code == 200  # development
+    _production(clean_env)
+    client = create_app().test_client()
+    assert client.get("/docs").status_code == 404
+    assert client.get("/openapi.json").status_code == 404
 
 
 def test_production_reports_every_problem_at_once(clean_env):

@@ -6,19 +6,26 @@ from ..models.core import User
 from ..extensions import db
 from flask_smorest import Blueprint as SmorestBlueprint
 
-# IP-based rate limiting for login: max 10 attempts per minute per IP
-_login_attempts = defaultdict(list)  # ip -> [timestamps]
+# IP-based rate limiting for login: an IP with 10 failed attempts in a minute is
+# refused until the window passes. Only failures count, so many participants
+# signing in from one clinic network don't lock each other out. The client IP
+# comes from ProxyFix (see CLOZE_PROXY_HOPS); per-process, in memory.
+_login_attempts = defaultdict(list)  # ip -> [timestamps of failed attempts]
 _RATE_LIMIT_WINDOW = 60  # seconds
-_RATE_LIMIT_MAX = 10  # attempts per window
+_RATE_LIMIT_MAX = 10  # failed attempts per window
 
 
 def _is_rate_limited(ip):
     now = time.time()
-    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < _RATE_LIMIT_WINDOW]
-    return len(_login_attempts[ip]) >= _RATE_LIMIT_MAX
+    recent = [t for t in _login_attempts.get(ip, ()) if now - t < _RATE_LIMIT_WINDOW]
+    if recent:
+        _login_attempts[ip] = recent
+    else:
+        _login_attempts.pop(ip, None)  # don't keep an entry for every IP ever seen
+    return len(recent) >= _RATE_LIMIT_MAX
 
 
-def _record_attempt(ip):
+def _record_failure(ip):
     _login_attempts[ip].append(time.time())
 
 auth_bp = Blueprint("auth1", __name__)
@@ -67,13 +74,13 @@ def api_login():
     if _is_rate_limited(ip):
         return jsonify({'status': 'error', 'message': 'Too many login attempts. Please wait a minute.'}), 429
 
-    _record_attempt(ip)
     data = request.json or {}
     user = User.query.filter_by(username=data.get('username')).first()
 
     if user:
         # Account lockout check
         if user.is_locked:
+            _record_failure(ip)
             remaining = int(user.locked_until - time.time())
             mins = max(1, remaining // 60)
             return jsonify({'status': 'error', 'message': f'Account temporarily locked. Try again in {mins} minute(s).'}), 423
@@ -93,4 +100,5 @@ def api_login():
             user.record_failed_login()
             db.session.commit()
 
+    _record_failure(ip)
     return jsonify({'status': 'error', 'message': 'Invalid credentials'}), 401

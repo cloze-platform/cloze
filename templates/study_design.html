@@ -424,7 +424,7 @@
         '</div>' +
         '<div class="flex items-center gap-3">' +
           '<span class="text-xs text-stone-300">' +
-            (chat.model_name || '') + (chat.max_messages ? ' · ' + chat.max_messages + ' turns' : '') +
+            escapeHtml(chat.model_name || '') + (chat.max_messages ? ' · ' + chat.max_messages + ' turns' : '') +
           '</span>' +
           '<button onclick="event.stopPropagation(); deleteChat(' + chat.id + ')" class="chat-meta text-stone-300 hover:text-red-400 transition-colors text-lg leading-none px-1 -mt-0.5">×</button>' +
         '</div>' +

@@ -480,9 +480,19 @@ def send_message(conversation_id):
 @login_required
 def save_selection():
     data = request.json or {}
+    try:
+        conversation_id = int(data.get('conversation_id'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'conversation_id is required'}), 400
+    conversation = db.get_or_404(Conversation, conversation_id)
+    # Selections feed the window's report, which the provider and participant
+    # read, so only save one against a conversation you can see.
+    if not current_user.can_access_patient(conversation.user_id):
+        abort(403)
+
     selection = SavedSelection(
         user_id=current_user.id,
-        conversation_id=data['conversation_id'],
+        conversation_id=conversation_id,
         selection_text=data['text'],
         message_ids=json.dumps(data.get('message_ids', [])),
         note=data.get('note')

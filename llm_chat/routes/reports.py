@@ -1,6 +1,6 @@
 import json
 import tempfile
-from flask import Blueprint, jsonify, abort, request, send_file
+from flask import Blueprint, jsonify, abort, request, send_file, current_app
 from flask_login import login_required, current_user
 from ..extensions import db
 from ..models import Report, ChatWindow
@@ -9,6 +9,13 @@ from ..utils.settings_resolution import get_effective_setting
 from report.generator import UnifiedReportGenerator
 
 reports_bp = Blueprint("reports", __name__, url_prefix="/api/reports")
+
+
+def _failed(action):
+    """Log the exception and answer with a generic 500. Exception text can carry
+    SQL, file paths or participant data, so it stays in the server log."""
+    current_app.logger.exception("%s failed", action)
+    return jsonify({'error': f'{action} failed. The details are in the server log.'}), 500
 
 
 @reports_bp.route("/", methods=["GET"])
@@ -123,8 +130,8 @@ def generate_window_report(window_id):
         report_type = data.get('report_type', None)
         report = generate_report_for_window(window_id, report_type=report_type)
         return jsonify(report.to_dict())
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        return _failed('Report generation')
 
 
 @reports_bp.route("/check-scheduler", methods=["POST"])
@@ -141,8 +148,8 @@ def check_scheduler():
             'message': f'Processed {len(processed)} expired window(s)',
             'window_ids': processed
         })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        return _failed('Expired-window processing')
 
 
 @reports_bp.route("/html/<int:report_id>", methods=["GET"])
@@ -208,8 +215,8 @@ def window_report_config(window_id):
             db.session.commit()
 
             return jsonify({'status': 'success', 'config': window.get_report_config()})
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
+        except Exception:
+            return _failed('Saving the report settings')
 
 
 @reports_bp.route("/window/<int:window_id>/generate-unified", methods=["POST"])
@@ -231,8 +238,8 @@ def generate_unified_window_report(window_id):
     try:
         report = generate_report_for_window(window_id)
         return jsonify(report.to_dict())
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        return _failed('Report generation')
 
 
 @reports_bp.route("/download/<int:report_id>/<format>", methods=["GET"])
@@ -354,8 +361,8 @@ def get_live_report(window_id):
             'data': report_data,
             'window_id': window_id
         })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        return _failed('Building the live report')
 
 
 @reports_bp.route("/registry", methods=["GET"])
