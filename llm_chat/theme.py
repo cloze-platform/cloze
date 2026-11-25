@@ -100,3 +100,75 @@ def _soft_ramp(theme):
     p = theme["primary"]
     return {50: _mix(p, 0.06), 100: _mix(p, 0.12), 200: _mix(p, 0.24), 300: _mix(p, 0.42),
             400: _mix(p, 0.65), 500: _mix(p, 0.85), 600: p, 700: theme["hover"]}
+
+
+# ── Participant pages (templates/participant/) ─────────────────────────────
+# The redesigned participant pages use their own small set of colour tokens.
+# Neutrals and status colours are fixed; everything tinted is mixed from the
+# instance's primary, and dark mode is built on the instance's dark_* colours,
+# so a CLOZE_THEME restyles these pages too.
+
+def luminance(colour):
+    """WCAG relative luminance of a #RRGGBB colour."""
+    def channel(c):
+        c /= 255
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (channel(c) for c in _rgb(colour))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def contrast(a, b):
+    """WCAG contrast ratio between two #RRGGBB colours (1 to 21)."""
+    hi, lo = sorted((luminance(a), luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+_INK, _WHITE = "#18181F", "#FFFFFF"
+
+
+def participant_tokens(theme):
+    """(light, dark) dicts of participant colour tokens, without the --p- prefix."""
+    p, hover = theme["primary"], theme["hover"]
+    on_accent = _WHITE if contrast(_WHITE, p) >= 4.5 else _INK
+    shared = {
+        "accent": p, "accent-hover": hover, "on-accent": on_accent,
+        "night": _mix(p, 0.22, "#100E20"),  # the closed-hours page, the same in both modes
+    }
+    light = {
+        **shared,
+        "page": _WHITE, "menu": "#F7F7FA", "surface": _WHITE, "quiet": "#F7F7FA",
+        "raised": "#F1F1F6", "chat": _WHITE,
+        "line": "#E7E7EE", "line-strong": "#DADAE3",
+        "ink": _INK, "ink-2": "#2C2C36", "ink-3": "#4B4B58", "hint": "#6B6B78", "ring": "#8E8E9C",
+        "accent-soft": _mix(p, 0.10), "accent-line": _mix(p, 0.40), "accent-ink": _mix(p, 0.78, "#000000"),
+        "focus": p,
+        "done": "#13795B", "done-fill": "#13795B", "done-soft": "#E6F4EE",
+        "waiting": "#8A5300", "waiting-soft": "#FFF3DC", "waiting-line": "#F1D9A6",
+        "help": "#A3213D", "help-soft": "#FDECEF", "help-line": "#F6C9D2",
+    }
+    page, card, raised, border = (theme[k] for k in ("dark_page", "dark_card", "dark_raised", "dark_border"))
+    accent_ink_dark = _mix(p, 0.42)
+    dark = {
+        **shared,
+        "page": page, "menu": theme["dark_sidebar"], "surface": card, "quiet": card,
+        "raised": raised, "chat": theme["derived"]["chat-page-dark"],
+        "line": border, "line-strong": _mix(_WHITE, 0.10, border),
+        "ink": "#F1EFF6", "ink-2": "#DCD9E4", "ink-3": "#C2BFCC", "hint": "#A3A0AE", "ring": "#7C788A",
+        "accent-soft": _mix(p, 0.22, page), "accent-line": _mix(p, 0.50, page), "accent-ink": accent_ink_dark,
+        "focus": accent_ink_dark,
+        "done": "#5FD3A6", "done-fill": "#2FA67A", "done-soft": "#16302A",
+        "waiting": "#F2C46B", "waiting-soft": "#3A2E16", "waiting-line": "#5A4520",
+        "help": "#FF9DB0", "help-soft": "#3B1B25", "help-line": "#5C2A38",
+    }
+    return light, dark
+
+
+def participant_css(theme):
+    """CSS for the participant tokens: light on :root, dark under prefers-color-scheme."""
+    light, dark = participant_tokens(theme)
+
+    def declarations(tokens):
+        return " ".join(f"--p-{name}: {value};" for name, value in tokens.items())
+
+    return (f":root {{ {declarations(light)} }}\n"
+            f"@media (prefers-color-scheme: dark) {{ :root {{ {declarations(dark)} }} }}")

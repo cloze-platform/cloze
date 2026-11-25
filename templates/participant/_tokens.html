@@ -1,0 +1,38 @@
+{# Participant design tokens. Include after _tailwind_theme.html.
+   Colours come from llm_chat/theme.py (participant_css), built from the
+   instance's CLOZE_THEME, so these pages follow the deployment's palette and
+   its dark colours. Templates use the Tailwind names (bg-p-page, text-p-ink,
+   border-p-line …), never hex values. #}
+<style>
+  @font-face {
+    font-family: "Figtree";
+    font-style: normal;
+    font-weight: 300 900;
+    font-display: swap;
+    src: url("{{ url_for('static', filename='fonts/figtree/figtree-latin-wght-normal.woff2') }}") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+      U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+  {{ participant_css|safe }}
+  html { color-scheme: light dark; }
+  body { font-family: "Figtree", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  :focus-visible { outline: 2px solid var(--p-focus); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  }
+</style>
+<script>
+  (function () {
+    var names = ["page", "menu", "surface", "quiet", "raised", "chat", "line", "line-strong",
+      "ink", "ink-2", "ink-3", "hint", "ring", "accent", "accent-hover", "on-accent", "accent-soft",
+      "accent-line", "accent-ink", "focus", "night", "done", "done-fill", "done-soft", "waiting",
+      "waiting-soft", "waiting-line", "help", "help-soft", "help-line"];
+    var p = {};
+    names.forEach(function (n) { p[n] = "var(--p-" + n + ")"; });
+    var extend = tailwind.config.theme.extend;
+    extend.colors = Object.assign({}, extend.colors, { p: p });
+    extend.fontFamily = Object.assign({}, extend.fontFamily, {
+      sans: ["Figtree", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"]
+    });
+  })();
+</script>
