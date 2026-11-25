@@ -86,6 +86,25 @@
 {% endmacro %}
 
 
+{# One exercise as a full-width row: Home and the Exercises page. #}
+{% macro exercise_row(nav, ex) %}
+  {% set why = nav.locked(ex) %}
+  {% if why %}
+    <span class="flex min-h-[48px] items-center gap-3 rounded-xl px-3 text-[15px] text-p-ink-3">
+      {{ mark(nav, ex, 18) }}<span class="min-w-0 flex-1">{{ ex.title }}</span>
+      <span class="text-[13px] text-p-hint">{{ "After your safety plan" if why == "safety_plan" else ("Closed" if ex.group.is_closed else "Not open yet") }}</span>
+    </span>
+  {% else %}
+    <a href="{{ exercise_url(ex) }}" class="flex min-h-[48px] items-center gap-3 rounded-xl px-3 text-[15px] text-p-ink no-underline hover:bg-p-raised">
+      {{ mark(nav, ex, 18) }}<span class="min-w-0 flex-1">{{ ex.title }}</span>
+      <span class="text-[13px] font-semibold {{ 'text-p-done' if ex.state == 'finished' else 'text-p-accent-ink' }}">
+        {{- {"finished": "Finished", "started": "Continue", "not_started": "Start"}[ex.state] -}}
+      </span>
+    </a>
+  {% endif %}
+{% endmacro %}
+
+
 {% macro page(nav) %}
 {% set focus = nav.focus_group() %}
 <div class="flex flex-col gap-3">
@@ -99,23 +118,7 @@
         <span class="text-p-hint transition-transform group-open/g:rotate-180">{{ icon("chevron-down", 18, "", 2) }}</span>
       </summary>
       <ul class="flex flex-col gap-1 px-2 pb-2" role="list">
-        {% for ex in group.exercises %}
-          <li>
-            {% if nav.locked(ex) %}
-              <span class="flex min-h-[48px] items-center gap-3 rounded-xl px-3 text-[15px] text-p-ink-3">
-                {{ mark(nav, ex, 18) }}<span class="min-w-0 flex-1">{{ ex.title }}</span>
-                <span class="text-[13px] text-p-hint">{{ "After your safety plan" if nav.locked(ex) == "safety_plan" else ("Closed" if group.is_closed else "Not open yet") }}</span>
-              </span>
-            {% else %}
-              <a href="{{ exercise_url(ex) }}" class="flex min-h-[48px] items-center gap-3 rounded-xl px-3 text-[15px] text-p-ink no-underline hover:bg-p-raised">
-                {{ mark(nav, ex, 18) }}<span class="min-w-0 flex-1">{{ ex.title }}</span>
-                <span class="text-[13px] font-semibold {{ 'text-p-done' if ex.state == 'finished' else 'text-p-accent-ink' }}">
-                  {{- {"finished": "Finished", "started": "Continue", "not_started": "Start"}[ex.state] -}}
-                </span>
-              </a>
-            {% endif %}
-          </li>
-        {% endfor %}
+        {% for ex in group.exercises %}<li>{{ exercise_row(nav, ex) }}</li>{% endfor %}
       </ul>
     </details>
   {% else %}

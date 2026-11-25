@@ -190,3 +190,101 @@ def test_group_summaries_count_started_and_finished(study, login_as, v2, db):
     _approve_plan(db, study)
     main = _html(login_as(study["patient"]), "/exercises").split("<main", 1)[1]
     assert "1 started" in main and "All finished" in main and "2 exercises" in main and "Opens Wed 20 Jan" in main
+
+
+# ── Home ──
+
+def _main(html):
+    return html[html.index("<main"):html.index("</main>")]
+
+
+def _home(client):
+    return _main(_html(client, "/dashboard"))
+
+
+def test_home_shows_open_groups_and_whats_coming_up(study, login_as, v2, db):
+    _approve_plan(db, study)
+    home = _home(login_as(study["patient"]))
+    assert "Welcome back" in home and "Finish your safety plan" not in home
+    assert "Week 1" in home and "Characters" in home and "Thought records" in home
+    assert "Pilot chat" not in home and "Welcome</" not in home            # closed groups stay in the menu
+    upcoming = home[home.index("Coming up"):]
+    assert "Week 2" in upcoming and "Opens Wed 20 Jan" in upcoming
+    assert f'href="/exercise/template/{study["checkin"].id}"' in home
+
+
+@pytest.mark.parametrize("statuses, heading, link", [
+    ([], "Your care team is starting your safety plan", None),
+    (["draft"], "Finish your safety plan", "Continue my safety plan"),
+    (["pending_review"], "Your safety plan is with your care team", "See my safety plan"),
+])
+def test_home_leads_with_the_safety_plan_step(study, login_as, v2, db, statuses, heading, link):
+    for status in statuses:
+        db.session.add(SafetyPlan(patient_id=study["patient"].id, status=status))
+    db.session.commit()
+    home = _home(login_as(study["patient"]))
+    assert f'<h1 id="step-heading"' in home and heading in home
+    assert (link in home) if link else ("Continue my safety plan" not in home)
+    assert "These open once your care team approves your safety plan." in home
+    assert f'/exercise/template/{study["checkin"].id}"' not in home         # locked
+
+
+def test_safety_plan_step_counts_the_participants_sections(study, login_as, v2, db):
+    plan = SafetyPlan(patient_id=study["patient"].id, status="draft")
+    plan.set_warning_signs([{"sign": "Not sleeping"}])
+    plan.set_reasons_for_living([{"reason": "My dog"}])
+    db.session.add(plan)
+    db.session.commit()
+    assert "2 of 4 sections" in _home(login_as(study["patient"]))
+
+
+@pytest.mark.parametrize("statuses", [["active"], ["active", "pending_review"]])
+def test_no_safety_plan_step_once_approved(study, login_as, v2, db, statuses):
+    for status in statuses:
+        db.session.add(SafetyPlan(patient_id=study["patient"].id, status=status))
+    db.session.commit()
+    assert "step-heading" not in _home(login_as(study["patient"]))
+
+
+def test_no_safety_plan_step_when_the_study_has_none(study, login_as, v2, db):
+    db.session.add(ProviderFeatureFlags(provider_id=study["provider"].id, require_safety_plan=False))
+    db.session.commit()
+    home = _home(login_as(study["patient"]))
+    assert "step-heading" not in home and f'/exercise/template/{study["checkin"].id}"' in home
+
+
+def test_home_shows_closed_hours(study, login_as, v2, db, monkeypatch):
+    _approve_plan(db, study)
+    db.session.add(ProviderFeatureFlags(provider_id=study["provider"].id, access_hours_enabled=True,
+                                        access_hours_start="09:00", access_hours_end="17:00"))
+    db.session.commit()
+    from llm_chat.utils import access_hours
+    monkeypatch.setattr(access_hours, "within_access_window", lambda *a, **k: False)
+    home = _home(login_as(study["patient"]))
+    assert "Closed for now" in home and "Opens" in home and "You can still read your past chats." in home
+    monkeypatch.setattr(access_hours, "within_access_window", lambda *a, **k: True)
+    assert "Closed for now" not in _home(login_as(study["patient"]))
+
+
+def test_home_notes_reports_ready_and_being_prepared(study, login_as, v2, db):
+    from llm_chat.models import Report
+    _approve_plan(db, study)
+    home = _home(login_as(study["patient"]))
+    assert "Your report from Intro is being prepared." in home              # ended, report not made yet
+    assert "Your report is ready" not in home
+    db.session.add(Report(window_id=study["pilot"].id, patient_id=study["patient"].id,
+                          provider_id=study["provider"].id, report_type="summary", report_data="{}"))
+    db.session.commit()
+    assert "Your report is ready" in _home(login_as(study["patient"]))
+
+
+def test_home_says_nothing_about_reports_when_they_are_off(study, login_as, v2, db):
+    _approve_plan(db, study)
+    db.session.add(ProviderFeatureFlags(provider_id=study["provider"].id, enable_nlp_report=False))
+    db.session.commit()
+    assert "being prepared" not in _home(login_as(study["patient"]))
+
+
+def test_home_for_a_participant_with_nothing_yet(make_user, login_as, v2):
+    home = _home(login_as(make_user("new")))
+    assert "Nothing to do yet" in home and "data-help-open" in home

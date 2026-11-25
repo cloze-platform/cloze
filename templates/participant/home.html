@@ -1,10 +1,158 @@
 {% extends "participant/base.html" %}
-{# Home. A placeholder until the menu and Home content land (stage 1, commits 4 and 5). #}
+{# Home, the default version for a study with no pages of its own (stage 1).
+   From the top: a required step (an unapproved safety plan), the closed-hours
+   notice, the open groups with their exercises, what's coming up, and reports. #}
+{% from "participant/_exercises.html" import exercise_row, group_summary %}
 
 {% block title %}Home · Cloze{% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-3xl px-5 py-10 sm:px-8">
-  <h1 class="text-2xl font-bold tracking-tight text-p-ink">Welcome back</h1>
+{% set plan = nav.safety_plan %}
+{% set hours = nav.opening_hours %}
+{% set any_begun = nav.exercises|rejectattr("state", "equalto", "not_started")|list %}
+{% set open_groups = nav.open_groups|sort(attribute="window.start_date")|selectattr("exercises")|list %}
+{% set preparing = nav.groups|selectattr("status", "equalto", "generating_report")|selectattr("exercises")|list %}
+
+<div class="mx-auto flex max-w-3xl flex-col gap-10 px-5 pb-14 pt-7 sm:px-8 lg:pt-12">
+
+  {# ── A required step: the safety plan ── #}
+  {% if plan.blocks_starting %}
+    <section aria-labelledby="step-heading" class="flex flex-col gap-5 rounded-[22px] bg-p-accent-soft px-6 py-6 sm:px-7">
+      <div class="flex max-w-xl flex-col gap-1.5">
+        <span class="text-[13px] font-semibold text-p-accent-ink">Before your first exercise</span>
+        {% if plan.state == "your_turn" %}
+          <h1 id="step-heading" class="text-[26px] font-semibold leading-tight tracking-tight sm:text-[28px]">Finish your safety plan</h1>
+          <p class="text-base leading-relaxed text-p-ink-3">Your care team started a safety plan with you. Add your parts, and they'll review it. Your exercises open once it's approved.</p>
+        {% elif plan.state == "waiting" %}
+          <h1 id="step-heading" class="text-[26px] font-semibold leading-tight tracking-tight sm:text-[28px]">Your safety plan is with your care team</h1>
+          <p class="text-base leading-relaxed text-p-ink-3">They'll review what you added. Your exercises open once it's approved.</p>
+        {% else %}
+          <h1 id="step-heading" class="text-[26px] font-semibold leading-tight tracking-tight sm:text-[28px]">Your care team is starting your safety plan</h1>
+          <p class="text-base leading-relaxed text-p-ink-3">You'll be able to add your parts once they've started it. Your exercises open once it's approved.</p>
+        {% endif %}
+      </div>
+      <ol class="flex flex-wrap gap-2.5" role="list">
+        {% set adding = plan.state == "your_turn" %}
+        {% set reviewing = plan.state == "waiting" %}
+        <li {% if adding %}aria-current="step"{% endif %} class="flex min-h-14 flex-[1_1_200px] items-center gap-3 rounded-2xl bg-p-surface px-3.5 py-2 {{ 'shadow-[0_0_0_2px_var(--p-accent)]' if adding }}">
+          {% if reviewing %}{{ status_icon("finished", 22) }}{% else %}<span aria-hidden="true" class="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-xs font-bold {{ 'bg-p-accent text-p-on-accent' if adding else 'text-p-ink-3 shadow-[inset_0_0_0_1.5px_var(--p-ring)]' }}">1</span>{% endif %}
+          <span class="flex flex-col">
+            <span class="text-[15px] font-semibold">Add your parts</span>
+            <span class="text-[13px] {{ 'text-p-done' if reviewing else 'text-p-ink-3' }}">
+              {%- if reviewing %}Done{% elif adding %}{{ plan.sections_done }} of {{ plan.SECTIONS }} sections{% else %}Not yet{% endif -%}
+            </span>
+          </span>
+        </li>
+        <li {% if reviewing %}aria-current="step"{% endif %} class="flex min-h-14 flex-[1_1_200px] items-center gap-3 rounded-2xl bg-p-surface px-3.5 py-2 {{ 'shadow-[0_0_0_2px_var(--p-accent)]' if reviewing }}">
+          <span aria-hidden="true" class="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-xs font-bold {{ 'bg-p-accent text-p-on-accent' if reviewing else 'text-p-ink-3 shadow-[inset_0_0_0_1.5px_var(--p-ring)]' }}">2</span>
+          <span class="flex flex-col">
+            <span class="text-[15px] font-semibold">Care team review</span>
+            <span class="text-[13px] text-p-ink-3">{{ "Waiting for them" if reviewing else "After you add your parts" }}</span>
+          </span>
+        </li>
+      </ol>
+      {% if plan.state in ("your_turn", "waiting") %}
+        <a href="{{ url_for('participant.safety_plan') }}" class="inline-flex min-h-12 items-center gap-2 self-start rounded-[14px] bg-p-accent px-5 text-base font-semibold text-p-on-accent no-underline hover:bg-p-accent-hover">
+          {{ "Continue my safety plan" if plan.state == "your_turn" else "See my safety plan" }}{{ icon("arrow-right", 18, "", 2) }}
+        </a>
+      {% endif %}
+    </section>
+  {% endif %}
+
+  {# ── Greeting ── #}
+  <div class="flex flex-col gap-2">
+    {% if plan.blocks_starting %}
+      <h2 class="text-[28px] font-semibold leading-tight tracking-tight">Welcome</h2>
+    {% else %}
+      <h1 class="text-[32px] font-semibold leading-tight tracking-tight sm:text-[34px]">{{ "Welcome back" if any_begun else "Welcome" }}</h1>
+    {% endif %}
+  </div>
+
+  {# ── Closed hours (read-only: chats are paused, reading stays open) ── #}
+  {% if hours.enabled and not hours.open %}
+    <section aria-label="Opening hours" class="flex flex-wrap items-center gap-4 rounded-[20px] bg-p-quiet px-6 py-5">
+      <span aria-hidden="true" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-p-waiting-soft text-p-waiting">{{ icon("moon", 20) }}</span>
+      <div class="flex min-w-0 flex-[1_1_260px] flex-col gap-0.5">
+        <span class="text-[13px] font-semibold text-p-waiting">Closed for now</span>
+        <span class="text-xl font-semibold tracking-tight">{{ hours.reopen or "Chats are closed right now" }}</span>
+        <span class="text-sm text-p-ink-3">{{ hours.schedule }}. You can still read your past chats.</span>
+      </div>
+    </section>
+  {% endif %}
+
+  {# ── Exercises in the open groups ── #}
+  {% if open_groups %}
+    <section aria-labelledby="exercises-heading" class="flex flex-col gap-4">
+      <div class="flex flex-col gap-1">
+        <h2 id="exercises-heading" class="text-[22px] font-semibold tracking-tight">Your exercises</h2>
+        {% if plan.blocks_starting %}<p class="text-[15px] text-p-ink-3">These open once your care team approves your safety plan.</p>{% endif %}
+      </div>
+      {% for group in open_groups %}
+        <section aria-labelledby="group-{{ group.id }}" class="rounded-[18px] border border-p-line bg-p-surface">
+          <div class="flex items-baseline justify-between gap-3 px-4 pb-1 pt-4">
+            <h3 id="group-{{ group.id }}" class="text-base font-semibold">{{ group.name }}</h3>
+            <span class="text-[13px] text-p-hint">{{ group_summary(nav, group) }}</span>
+          </div>
+          {% if group.closes_at and group.closes_at - nav.now < 30 * 86400 %}
+            <p class="px-4 text-[13px] text-p-hint">Open until <time datetime="{{ group.closes_at|p_iso }}">{{ group.closes_at|p_when(nav.timezone) }}</time></p>
+          {% endif %}
+          <ul class="flex flex-col gap-1 px-2 pb-2 pt-1" role="list">
+            {% for ex in group.exercises %}<li>{{ exercise_row(nav, ex) }}</li>{% endfor %}
+          </ul>
+        </section>
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  {# ── Coming up ── #}
+  {% if nav.upcoming_groups %}
+    <section aria-labelledby="upcoming-heading" class="flex flex-col gap-3">
+      <h2 id="upcoming-heading" class="text-[22px] font-semibold tracking-tight">Coming up</h2>
+      <ul class="flex flex-col border-t border-p-line" role="list">
+        {% for group in nav.upcoming_groups %}
+          <li class="flex min-h-[60px] items-center gap-3.5 border-b border-p-line">
+            <span class="text-p-hint">{{ icon("calendar", 18) }}</span>
+            <span class="flex min-w-0 flex-1 flex-col">
+              <span class="text-base font-semibold">{{ group.name }}</span>
+              <span class="text-[13px] text-p-hint">{{ group.exercises|length }} exercise{{ "s" if group.exercises|length != 1 }}</span>
+            </span>
+            <time datetime="{{ group.opens_at|p_iso }}" class="text-sm text-p-ink-3">Opens {{ group.opens_at|p_day(nav.timezone) }}</time>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {# ── Reports ── #}
+  {% if nav.reports_enabled and (nav.report_count or preparing) %}
+    <section aria-label="Reports" class="flex flex-col gap-2.5">
+      {% if nav.report_count %}
+        <a href="{{ url_for('participant.reports') }}" class="flex min-h-[64px] items-center gap-3.5 rounded-[18px] bg-p-quiet px-5 text-p-ink no-underline hover:bg-p-raised">
+          <span aria-hidden="true" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-p-accent-soft text-p-accent-ink">{{ icon("report", 20) }}</span>
+          <span class="flex flex-1 flex-col">
+            <span class="text-base font-semibold">{{ "Your report is ready" if nav.report_count == 1 else nav.report_count ~ " reports are ready" }}</span>
+            <span class="text-[13px] text-p-ink-3">A look back at your chats</span>
+          </span>
+          <span class="text-p-hint">{{ icon("chevron-right", 18, "", 2) }}</span>
+        </a>
+      {% endif %}
+      {% for group in preparing if group.exercises|selectattr("conversation")|list %}
+        <p class="flex min-h-[52px] items-center gap-3 rounded-[18px] border border-p-line px-5 text-[15px] text-p-ink-3">
+          {{ icon("clock", 18, "text-p-hint") }}Your report from {{ group.name }} is being prepared.
+        </p>
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  {# ── Nothing yet ── #}
+  {% if not nav.groups %}
+    <section class="flex flex-col gap-3 rounded-[20px] bg-p-quiet px-6 py-7">
+      <h2 class="text-lg font-semibold">Nothing to do yet</h2>
+      <p class="text-[15px] leading-relaxed text-p-ink-3">Your exercises will appear here when your study team adds them. If you need support now, Get help now is always here.</p>
+      <a href="{{ url_for('participant.help_page') }}" data-help-open class="inline-flex min-h-11 items-center gap-2 self-start rounded-xl bg-p-help-soft px-4 text-[15px] font-semibold text-p-help no-underline">{{ icon("heart", 18, "", 1.9) }}Get help now</a>
+    </section>
+  {% elif not open_groups and not nav.upcoming_groups %}
+    <p class="text-[15px] text-p-ink-3">There are no exercises open right now. <a href="{{ url_for('participant.exercises') }}" class="font-semibold text-p-accent-ink">See all your exercises</a></p>
+  {% endif %}
 </div>
 {% endblock %}

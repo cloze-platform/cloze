@@ -146,6 +146,8 @@ class SafetyPlanState:
     """
     required: bool
     state: str
+    sections_done: int = 0     # of the participant's four sections, in the draft
+    SECTIONS = 4
 
     @property
     def blocks_starting(self):
@@ -322,6 +324,10 @@ def safety_plan_state(patient_id, provider_id):
                                     SafetyPlan.status.in_(("active", "pending_review", "draft"))).all()
     has = {p.status for p in plans}
     active, pending, draft = "active" in has, "pending_review" in has, "draft" in has
+    draft_plan = next((p for p in plans if p.status == "draft"), None)
+    sections_done = sum(1 for section in (draft_plan.get_warning_signs(), draft_plan.get_coping_strategies(),
+                                          draft_plan.get_support_network(), draft_plan.get_reasons_for_living())
+                        if section) if draft_plan else 0
     if not (active or pending or draft):
         state = "none"
     elif draft and not active:
@@ -330,7 +336,7 @@ def safety_plan_state(patient_id, provider_id):
         state = "change_waiting" if pending else "approved"
     else:
         state = "waiting"
-    return SafetyPlanState(required=True, state=state)
+    return SafetyPlanState(required=True, state=state, sections_done=sections_done)
 
 
 def participant_reports_query(patient_id):
