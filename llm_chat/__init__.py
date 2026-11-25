@@ -13,6 +13,7 @@ from .routes.chat_windows import window_bp
 from .routes.reports import reports_bp
 from .routes.safety_plan import safety_bp
 from .routes.media import media_bp
+from .routes.participant import participant_bp
 from flask_smorest import Api
 
 # Load variables from .env - use explicit path to ensure it's found
@@ -107,6 +108,7 @@ def create_app():
     app.register_blueprint(reports_bp)
     app.register_blueprint(safety_bp)
     app.register_blueprint(media_bp)
+    app.register_blueprint(participant_bp)
 
     # Error pages
     from flask import render_template as _rt

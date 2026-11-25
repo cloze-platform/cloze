@@ -13,6 +13,8 @@ from ..models import ProviderFeatureFlags
 from ..utils.settings_resolution import get_effective_setting, get_provider_id_for_patient
 from ..utils.access_hours import within_access_window
 from ..services.greeting import resolve_greeting
+from ..utils.participant_ui import uses_v2
+from .participant import render_home as render_participant_home
 
 conv_bp = Blueprint("conversations", __name__, url_prefix="")
 
@@ -25,7 +27,9 @@ def user_dashboard():
         return render_template("admin_dashboard.html")
     elif current_user.is_provider():
         return render_template("provider_dashboard.html")
-    # For patients, show the new chat windows interface
+    # Participants: the redesigned pages when the instance has switched to them.
+    if uses_v2():
+        return render_participant_home()
     return render_template("user_dashboard.html")
 
 @conv_bp.route("/chat-windows")
