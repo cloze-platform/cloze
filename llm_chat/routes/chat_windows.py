@@ -5,6 +5,7 @@ from flask_login import login_required, current_user
 from ..extensions import db
 from ..models import ChatWindow, ChatTemplate, User, Conversation, SafetyPlan, ProviderFeatureFlags
 from ..utils.settings_resolution import get_effective_setting
+from ..services import participant_nav
 
 window_bp = Blueprint("chat_windows", __name__, url_prefix="/api/windows")
 
@@ -92,32 +93,20 @@ def get_chat_window(window_id):
 @window_bp.route("/current", methods=["GET"])
 @login_required
 def get_current_windows():
-    """Get active chat windows for the patient (current and upcoming)"""
+    """The participant's open chat windows, with their templates. What counts
+    as visible is decided in services/participant_nav.py."""
     if not current_user.is_patient():
         abort(403)
 
-    windows = [
-        w for w in ChatWindow.query.filter_by(
-            patient_id=current_user.id,
-            visible=True
-        ).all()
-        if w.is_current()
-    ]
-
-    # Include templates for each active window
     result = []
-    for window in windows:
-        window_data = window.to_dict()
-        window_data['templates'] = [t.to_dict() for t in window.templates.filter_by(visible=True).order_by(ChatTemplate.order_index).all()]
-        # Check if conversations already exist for each template
-        for template in window_data['templates']:
-            existing_conv = Conversation.query.filter_by(
-                user_id=current_user.id,
-                window_id=window.id,
-                template_id=template['id']
-            ).first()
-            template['has_conversation'] = existing_conv is not None
-            template['conversation_id'] = existing_conv.id if existing_conv else None
+    for group in participant_nav.build(current_user).open_groups:
+        window_data = group.window.to_dict()
+        window_data['templates'] = []
+        for exercise in group.exercises:
+            template = exercise.template.to_dict()
+            template['has_conversation'] = exercise.conversation is not None
+            template['conversation_id'] = exercise.conversation_id
+            window_data['templates'].append(template)
         result.append(window_data)
 
     return jsonify(result)

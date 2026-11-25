@@ -1,0 +1,342 @@
+"""What a participant can see: one place for the rules.
+
+build(user) returns the participant's groups (chat windows) and exercises
+(chat templates) with their state, the conversations they can open, and the
+study-level state the menu and Home need: the safety plan, saving to the
+notebook, reports and opening hours.
+
+The redesigned pages render from it, and today's /api/windows/current and
+/api/conversations are built from it too, so the two interfaces can't
+disagree about what a participant sees. Change visibility rules here, not in
+the routes.
+
+The main rules:
+- Hidden windows don't exist for the participant. Withdrawing from a study
+  hides the windows that haven't ended, so they disappear too.
+- Hidden templates don't exist either.
+- An exercise's conversation is the participant's first conversation for that
+  window and template.
+- An exercise is Finished when its window has closed or it has used its last
+  turn; Started when it has messages; otherwise Not started.
+"""
+
+import json
+import time
+from dataclasses import dataclass, field
+from functools import cached_property
+
+from sqlalchemy import case, func
+
+from ..extensions import db
+from ..models import ChatTemplate, ChatWindow, Conversation, Message, Report, SafetyPlan, SavedSelection
+from ..utils.settings_resolution import get_effective_setting, get_provider_id_for_patient
+
+NOT_STARTED, STARTED, FINISHED = "not_started", "started", "finished"
+TURN_LIMIT, WINDOW_CLOSED = "turn_limit", "window_closed"
+
+OPEN, UPCOMING = "active", "scheduled"           # ChatWindow.compute_status values
+CLOSED = ("generating_report", "report_ready")
+
+
+@dataclass
+class Exercise:
+    """One chat template in a group, with the participant's conversation if any."""
+    template: ChatTemplate
+    group: "Group" = field(repr=False)
+    conversation: Conversation | None = None
+    message_count: int = 0
+    turns_used: int = 0
+    max_turns: int | None = None
+
+    @property
+    def id(self):
+        return self.template.id
+
+    @property
+    def title(self):
+        return self.template.title
+
+    @property
+    def conversation_id(self):
+        return self.conversation.id if self.conversation else None
+
+    @property
+    def turns_left(self):
+        return max(0, self.max_turns - self.turns_used) if self.max_turns else None
+
+    @property
+    def end_reason(self):
+        """Why a finished exercise ended, or None. Worked out from the window
+        and the turn count; a sent message can't follow either, so the turn
+        limit, if reached, came first."""
+        if self.conversation is None:
+            return None
+        if self.max_turns and self.turns_used >= self.max_turns:
+            return TURN_LIMIT
+        if self.group.is_closed:
+            return WINDOW_CLOSED
+        return None
+
+    @property
+    def state(self):
+        if self.end_reason:
+            return FINISHED
+        return STARTED if self.message_count else NOT_STARTED
+
+
+@dataclass
+class Group:
+    """A chat window: the exercises the participant has for one phase or cycle."""
+    window: ChatWindow
+    status: str
+    exercises: list = field(default_factory=list)
+
+    @property
+    def id(self):
+        return self.window.id
+
+    @property
+    def name(self):
+        return self.window.phase_label or self.window.flow_name or self.window.title
+
+    @property
+    def is_open(self):
+        return self.status == OPEN
+
+    @property
+    def is_upcoming(self):
+        return self.status == UPCOMING
+
+    @property
+    def is_closed(self):
+        return self.status in CLOSED
+
+    @property
+    def opens_at(self):
+        return self.window.start_date
+
+    @property
+    def closes_at(self):
+        return self.window.end_date
+
+    def count(self, state):
+        return sum(1 for e in self.exercises if e.state == state)
+
+
+@dataclass
+class Chat:
+    """A conversation the participant can see, as /api/conversations lists it."""
+    conversation: Conversation
+    window: ChatWindow | None
+    status: str | None
+    message_count: int
+
+
+@dataclass
+class SafetyPlanState:
+    """The participant's safety plan, as their pages show it.
+
+    state is one of:
+      off             the study doesn't use safety plans
+      none            the research team hasn't started one yet
+      your_turn       a draft is waiting for the participant's sections
+      waiting         submitted for the first time, waiting for review
+      approved        active, nothing pending
+      change_waiting  active, with changes waiting for review
+    """
+    required: bool
+    state: str
+
+    @property
+    def blocks_starting(self):
+        """Exercises can't be started until a required plan is approved (the
+        server enforces this in start_conversation_from_template)."""
+        return self.required and self.state not in ("approved", "change_waiting")
+
+    @property
+    def needs_participant(self):
+        return self.state == "your_turn"
+
+
+@dataclass
+class Nav:
+    user: object
+    now: float
+    provider_id: int | None
+    groups: list           # every visible window, oldest first
+    chats: list            # every conversation the participant can see, newest first
+    max_turns: int | None
+
+    # ── Groups and exercises ──
+
+    @property
+    def open_groups(self):
+        return [g for g in self.groups if g.is_open]
+
+    @property
+    def upcoming_groups(self):
+        return sorted((g for g in self.groups if g.is_upcoming), key=lambda g: (g.opens_at, g.id))
+
+    @property
+    def menu_groups(self):
+        """Groups for the menu and Home: in the order they open."""
+        return sorted(self.groups, key=lambda g: (g.opens_at, g.id))
+
+    @property
+    def exercises(self):
+        return [e for g in self.groups for e in g.exercises]
+
+    def exercise_for_template(self, template_id):
+        return next((e for e in self.exercises if e.id == template_id), None)
+
+    def exercise_for_conversation(self, conversation_id):
+        return next((e for e in self.exercises if e.conversation_id == conversation_id), None)
+
+    def locked(self, exercise):
+        """Why the participant can't start this exercise now, or None."""
+        if exercise.conversation is not None:
+            return None
+        if not exercise.group.is_open:
+            return "window"
+        if self.safety_plan.blocks_starting:
+            return "safety_plan"
+        return None
+
+    # ── Study-level state (loaded when first used) ──
+
+    @cached_property
+    def safety_plan(self):
+        return safety_plan_state(self.user.id, self.provider_id)
+
+    @cached_property
+    def can_save(self):
+        return bool(get_effective_setting("users_can_save_selections", self.provider_id, True))
+
+    @cached_property
+    def notebook_count(self):
+        return SavedSelection.query.filter_by(user_id=self.user.id).count()
+
+    @cached_property
+    def reports_enabled(self):
+        return bool(get_effective_setting("enable_nlp_report", self.provider_id, True))
+
+    @cached_property
+    def report_count(self):
+        return participant_reports_query(self.user.id).count() if self.reports_enabled else 0
+
+    @cached_property
+    def opening_hours(self):
+        return opening_hours(self.provider_id)
+
+
+def build(user, now=None):
+    """Everything a participant's pages show about their study, as of now."""
+    now = time.time() if now is None else now
+    provider_id = get_provider_id_for_patient(user.id) if user.is_patient() else None
+    max_turns = get_effective_setting("max_turns_per_conversation", provider_id) if user.is_patient() else None
+
+    windows = (ChatWindow.query.filter_by(patient_id=user.id, visible=True)
+               .order_by(ChatWindow.id).all())
+    templates = (ChatTemplate.query
+                 .filter(ChatTemplate.window_id.in_([w.id for w in windows]), ChatTemplate.visible.is_(True))
+                 .order_by(ChatTemplate.window_id, ChatTemplate.order_index, ChatTemplate.id).all()
+                 if windows else [])
+    conversations = user.conversations.order_by(Conversation.updated_at.desc()).all()
+    counts = _message_counts([c.id for c in conversations])
+
+    # An exercise's conversation: the first one for its window and template.
+    by_exercise = {}
+    for c in sorted(conversations, key=lambda c: c.id):
+        if c.window_id and c.template_id:
+            by_exercise.setdefault((c.window_id, c.template_id), c)
+
+    groups = {w.id: Group(window=w, status=w.compute_status(now)) for w in windows}
+    for t in templates:
+        group = groups[t.window_id]
+        conv = by_exercise.get((t.window_id, t.id))
+        total, user_turns = counts.get(conv.id, (0, 0)) if conv else (0, 0)
+        group.exercises.append(Exercise(template=t, group=group, conversation=conv, message_count=total,
+                                        turns_used=user_turns, max_turns=max_turns))
+
+    return Nav(user=user, now=now, provider_id=provider_id, groups=list(groups.values()),
+               chats=_visible_chats(conversations, counts, now), max_turns=max_turns)
+
+
+def _message_counts(conversation_ids):
+    """{conversation_id: (messages, participant messages)}."""
+    if not conversation_ids:
+        return {}
+    rows = (db.session.query(Message.conversation_id, func.count(Message.id),
+                             func.sum(case((Message.role == "user", 1), else_=0)))
+            .filter(Message.conversation_id.in_(conversation_ids))
+            .group_by(Message.conversation_id).all())
+    return {cid: (total, int(user_turns or 0)) for cid, total, user_turns in rows}
+
+
+def _visible_chats(conversations, counts, now):
+    """The participant's conversations, minus those in hidden windows and
+    hidden ones with no messages. A conversation whose window was deleted
+    keeps showing, without window details."""
+    window_ids = {c.window_id for c in conversations if c.window_id}
+    windows = {w.id: w for w in ChatWindow.query.filter(ChatWindow.id.in_(window_ids)).all()} if window_ids else {}
+    chats = []
+    for c in conversations:
+        window = windows.get(c.window_id)
+        if window is not None and not window.visible:
+            continue
+        total = counts.get(c.id, (0, 0))[0]
+        if total == 0 and not c.visible:
+            continue
+        chats.append(Chat(conversation=c, window=window, status=window.compute_status(now) if window else None,
+                          message_count=total))
+    return chats
+
+
+def safety_plan_state(patient_id, provider_id):
+    required = bool(get_effective_setting("require_safety_plan", provider_id, True))
+    if not required:
+        return SafetyPlanState(required=False, state="off")
+    plans = SafetyPlan.query.filter(SafetyPlan.patient_id == patient_id,
+                                    SafetyPlan.status.in_(("active", "pending_review", "draft"))).all()
+    has = {p.status for p in plans}
+    active, pending, draft = "active" in has, "pending_review" in has, "draft" in has
+    if not (active or pending or draft):
+        state = "none"
+    elif draft and not active:
+        state = "your_turn"
+    elif active:
+        state = "change_waiting" if pending else "approved"
+    else:
+        state = "waiting"
+    return SafetyPlanState(required=True, state=state)
+
+
+def participant_reports_query(patient_id):
+    """The participant's own reports from visible windows, newest first. One
+    per window: the summary report, not the detailed one."""
+    return (Report.query.join(ChatWindow)
+            .filter(Report.patient_id == patient_id, ChatWindow.visible.is_(True),
+                    Report.report_type.in_(("summary", "default")))
+            .order_by(Report.generated_at.desc()))
+
+
+def opening_hours(provider_id):
+    """The study's opening hours now: {"enabled": False}, or enabled with
+    open, schedule and reopen (see utils.access_hours.window_status)."""
+    if not get_effective_setting("access_hours_enabled", provider_id, False):
+        return {"enabled": False}
+    start = get_effective_setting("access_hours_start", provider_id)
+    end = get_effective_setting("access_hours_end", provider_id)
+    if not start or not end:
+        return {"enabled": False}
+    tz = get_effective_setting("access_hours_timezone", provider_id, "America/New_York")
+    days_raw = get_effective_setting("access_hours_days", provider_id)
+    try:
+        days = json.loads(days_raw) if days_raw else None
+    except (TypeError, ValueError):
+        days = None
+
+    from ..utils.access_hours import window_status
+    status = window_status(start, end, tz, days)
+    status["enabled"] = True
+    return status
