@@ -2,7 +2,7 @@ import json
 import re
 import time
 from datetime import datetime
-from flask import Blueprint, render_template, jsonify, request, abort, redirect, current_app
+from flask import Blueprint, render_template, jsonify, request, abort, redirect, current_app, url_for
 from flask_login import login_required, current_user
 from sqlalchemy.exc import IntegrityError
 from ..extensions import db
@@ -32,7 +32,11 @@ def user_dashboard():
     elif current_user.is_provider():
         return render_template("provider_dashboard.html")
     # Participants: the redesigned pages when the instance has switched to them.
+    # A link into today's page (/dashboard?conversation=<id>) opens the exercise.
     if uses_v2():
+        conversation_id = request.args.get('conversation', '')
+        if conversation_id.isdigit():
+            return redirect(url_for('participant.exercise', conversation_id=int(conversation_id)))
         return render_participant_home()
     return render_template("user_dashboard.html")
 
@@ -97,8 +101,10 @@ def view_conversation(conversation_id):
     if not current_user.can_access_patient(conversation.user_id):
         abort(403)
 
-    # Patients use the unified dashboard
+    # Patients use the unified dashboard, or on v2 the exercise page
     if current_user.is_patient():
+        if uses_v2():
+            return redirect(url_for('participant.exercise', conversation_id=conversation_id))
         return redirect('/dashboard?conversation=' + str(conversation_id))
 
     can_send_messages = False
