@@ -125,10 +125,16 @@ class ChatTemplate(db.Model):
     order_index = db.Column(db.Integer, default=0)  # Display order
     visible = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.Float, default=lambda: time.time())
+    # The study-design chat this was generated from, if any. Settings are copied
+    # at enrollment; ones that should follow later edits are read through this
+    # link instead (services/flow_links.py).
+    flow_chat_id = db.Column(db.Integer, db.ForeignKey('flow_chats.id', ondelete='SET NULL'),
+                             nullable=True, index=True)
 
     # Relationships
     model = db.relationship('Model')
     system_prompt = db.relationship('SystemPrompt')
+    flow_chat = db.relationship('FlowChat')
 
     def get_system_prompt_content(self):
         """Get the actual system prompt content to use.

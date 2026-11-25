@@ -810,6 +810,7 @@ def delete_phase(phase_id):
     if phase.flow.provider_id != current_user.id:
         abort(403)
 
+    _unlink_templates([c.id for c in phase.chats])
     db.session.delete(phase)
     db.session.commit()
     return jsonify({'status': 'success'})
@@ -882,6 +883,7 @@ def delete_flow_chat(chat_id):
     if chat.phase.flow.provider_id != current_user.id:
         abort(403)
 
+    _unlink_templates([chat.id])
     db.session.delete(chat)
     db.session.commit()
     return jsonify({'status': 'success'})
@@ -1012,9 +1014,21 @@ def _add_template_to_window(window, chat):
         custom_system_prompt=chat.custom_system_prompt,
         max_messages=chat.max_messages,
         order_index=chat.order_index,
+        flow_chat_id=chat.id,
     )
     db.session.add(template)
     return template
+
+
+def _unlink_templates(flow_chat_ids):
+    """Detach participants' chats from study-design chats about to be deleted.
+
+    Databases migrated with migrate_schema.py have no foreign key on
+    flow_chat_id to do this, and a dangling id could later match a new chat.
+    """
+    if flow_chat_ids:
+        ChatTemplate.query.filter(ChatTemplate.flow_chat_id.in_(flow_chat_ids)).update(
+            {ChatTemplate.flow_chat_id: None}, synchronize_session=False)
 
 
 def _backfill_chat_to_enrollments(flow, phase, chat):

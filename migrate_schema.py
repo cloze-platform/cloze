@@ -56,6 +56,9 @@ COLUMN_ADDITIONS = [
     # FK linkage window→phase, for backfilling chats into already-generated
     # windows on always-available flows.
     ('chat_windows', 'phase_id', 'INTEGER'),
+    # Link from a participant's chat to the study-design chat it came from
+    # (filled in for existing chats after the tables are updated; see below).
+    ('chat_templates', 'flow_chat_id', 'INTEGER'),
 ]
 
 
@@ -183,6 +186,17 @@ def run_migration(apply=False):
             print("Done. All tables up to date.")
         except Exception as e:
             sys.exit(f"db.create_all() failed: {e}")
+
+        # Participants' chats generated before chat_templates.flow_chat_id
+        # existed: link them to the study-design chat they came from.
+        print("\nLinking existing chats to their study-design chats...")
+        try:
+            from llm_chat.services.flow_links import link_templates_to_flow_chats
+            with app.app_context():
+                linked = link_templates_to_flow_chats()
+            print(f"Done. Linked {linked} chat(s).")
+        except Exception as e:
+            sys.exit(f"Linking chats failed: {e}")
 
 
 if __name__ == '__main__':
