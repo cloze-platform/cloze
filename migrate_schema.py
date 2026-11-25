@@ -142,7 +142,8 @@ def run_migration(apply=False):
 
     # ── Check for new tables (will be created by db.create_all) ──
     new_tables = ['safety_plans', 'audit_log', 'escalation_events', 'provider_feature_flags',
-                   'study_flows', 'flow_phases', 'flow_chats', 'flow_enrollments']
+                   'study_flows', 'flow_phases', 'flow_chats', 'flow_enrollments',
+                   'media_assets', 'media_renditions']
     print()
     for t in new_tables:
         if table_exists(cursor, t, db_type):

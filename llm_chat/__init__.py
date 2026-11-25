@@ -12,6 +12,7 @@ from .routes.admin import admin_bp
 from .routes.chat_windows import window_bp
 from .routes.reports import reports_bp
 from .routes.safety_plan import safety_bp
+from .routes.media import media_bp
 from flask_smorest import Api
 
 # Load variables from .env - use explicit path to ensure it's found
@@ -29,6 +30,9 @@ def create_app():
 
     # All environment-driven settings; raises ConfigError if production is misconfigured.
     app.config.update(load_config())
+    # Largest request body accepted (image uploads are the biggest, at 10 MB).
+    # Video will upload straight to storage, not through the app.
+    app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
 
     # Trust X-Forwarded-For/-Proto/-Host from the configured number of proxies,
     # so HTTPS is detected and request.remote_addr is the client, not the proxy.
@@ -102,6 +106,7 @@ def create_app():
     app.register_blueprint(window_bp)
     app.register_blueprint(reports_bp)
     app.register_blueprint(safety_bp)
+    app.register_blueprint(media_bp)
 
     # Error pages
     from flask import render_template as _rt

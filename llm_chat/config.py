@@ -118,4 +118,10 @@ def load_config():
         # Local dev only: a named AWS profile. In production boto3 uses the
         # instance or task role.
         "CLOZE_GUARD_AWS_PROFILE": _env("CLOZE_GUARD_AWS_PROFILE"),
+        # Researcher media (images, later video) in a private S3 bucket. Without
+        # one, development stores files under instance/media and production
+        # switches uploads off (a container's disk is wiped on every deploy).
+        "CLOZE_MEDIA_BUCKET": _env("CLOZE_MEDIA_BUCKET"),
+        # The bucket's region; boto3's usual lookup (AWS_REGION) when unset.
+        "CLOZE_MEDIA_REGION": _env("CLOZE_MEDIA_REGION"),
     }
