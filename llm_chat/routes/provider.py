@@ -10,7 +10,7 @@ from ..utils.passwords import validate_password
 from ..extensions import db
 from ..models import (User, Conversation, ProviderPatient, ProviderSettings,
                       ChatWindow, ChatTemplate, AuditLog, EscalationEvent, ProviderFeatureFlags, SystemPrompt,
-                      StudyFlow, FlowPhase, FlowChat, FlowEnrollment)
+                      StudyFlow, FlowPhase, FlowChat, FlowEnrollment, Model)
 from ..utils.settings_resolution import get_effective_setting
 from ..services.greeting import apply_greeting_fields
 
@@ -828,6 +828,21 @@ def delete_phase(phase_id):
 
 # ── Flow Chats ────────────────────────────────────────────────
 
+NO_MODEL = 'Choose a model for this chat.'
+
+
+def _existing_model_id(value):
+    """value as the id of a model that exists, or None. A chat can't be saved
+    without one (the column is NOT NULL), so a bad value is a 400, not a 500."""
+    if isinstance(value, bool):
+        return None
+    try:
+        model_id = int(value)
+    except (TypeError, ValueError):
+        return None
+    return model_id if db.session.get(Model, model_id) else None
+
+
 @provider_bp.route("/api/provider/phases/<int:phase_id>/chats", methods=['POST'])
 @role_required('provider')
 def create_flow_chat(phase_id):
@@ -837,13 +852,16 @@ def create_flow_chat(phase_id):
         abort(403)
 
     data = request.json or {}
+    model_id = _existing_model_id(data.get('model_id'))
+    if model_id is None:
+        return jsonify({'error': NO_MODEL}), 400
     max_order = max([c.order_index for c in phase.chats], default=-1)
 
     chat = FlowChat(
         phase_id=phase_id,
         title=data.get('title', 'New Chat').strip(),
         purpose=data.get('purpose'),
-        model_id=data['model_id'],
+        model_id=model_id,
         system_prompt_id=data.get('system_prompt_id'),
         custom_system_prompt=data.get('custom_system_prompt'),
         max_messages=data.get('max_messages'),
@@ -880,6 +898,11 @@ def update_flow_chat(chat_id):
         abort(403)
 
     data = request.json or {}
+    if 'model_id' in data:
+        model_id = _existing_model_id(data['model_id'])
+        if model_id is None:
+            return jsonify({'error': NO_MODEL}), 400
+        data = {**data, 'model_id': model_id}
     for key in ('title', 'purpose', 'model_id', 'system_prompt_id',
                 'custom_system_prompt', 'max_messages', 'order_index'):
         if key in data:

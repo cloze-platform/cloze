@@ -447,7 +447,7 @@
           '<input type="text" data-field="title" value="' + escapeHtml(chat.title) + '" onfocus="this.select()" class="inline-input text-sm font-medium text-stone-900 py-1"></div>' +
           '<div><span class="text-[11px] text-stone-300">Model</span>' +
           '<select data-field="model_id" class="inline-input text-sm text-stone-700 py-1 cursor-pointer">' +
-            models.map(function(m) { return '<option value="' + m.id + '"' + (m.id === chat.model_id ? ' selected' : '') + '>' + escapeHtml(m.name) + '</option>'; }).join('') +
+            renderModelOptions(chat) +
           '</select></div>' +
         '</div>' +
         '<div class="grid grid-cols-2 gap-4">' +
@@ -475,6 +475,18 @@
         '</div>' +
       '</div>' +
     '</div>';
+  }
+
+  // Only models available right now are listed. A chat whose model isn't (an
+  // API key removed, a local server down) keeps it selected, marked, so saving
+  // other edits doesn't silently switch the chat to a different model.
+  function renderModelOptions(chat) {
+    var current = models.some(function(m) { return m.id === chat.model_id; })
+      ? ''
+      : '<option value="' + chat.model_id + '" selected>' + escapeHtml((chat.model_name || 'Current model') + ' (unavailable)') + '</option>';
+    return current + models.map(function(m) {
+      return '<option value="' + m.id + '"' + (m.id === chat.model_id ? ' selected' : '') + '>' + escapeHtml(m.name) + '</option>';
+    }).join('');
   }
 
   // Images from the researcher's media library (Settings). A removed image a
@@ -646,7 +658,7 @@
       var field = el.dataset.field;
       var val = el.value;
       if (field === 'model_id') {
-        payload[field] = parseInt(val);
+        if (val) payload[field] = parseInt(val);
       } else if (field === 'system_prompt_id') {
         payload[field] = val ? parseInt(val) : null;
       } else if (field === 'max_messages') {
