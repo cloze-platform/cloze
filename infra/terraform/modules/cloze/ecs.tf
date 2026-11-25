@@ -47,6 +47,8 @@ locals {
       CLOZE_PUBLIC_URL      = "https://${var.domain_name}"
       AWS_SES_REGION        = var.region
       CLOZE_REPORTS_ENABLED = tostring(var.reports_enabled)
+      CLOZE_MEDIA_BUCKET    = aws_s3_bucket.media.bucket
+      CLOZE_MEDIA_REGION    = var.region
     },
     var.guard_sender_email == "" ? {} : { CLOZE_GUARD_SENDER = var.guard_sender_email },
     length(var.theme) == 0 ? {} : { CLOZE_THEME = jsonencode(var.theme) },

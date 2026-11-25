@@ -48,6 +48,11 @@ output "db_endpoint" {
   value       = aws_db_instance.main.endpoint
 }
 
+output "media_bucket" {
+  description = "Private bucket for researcher images and video. The app serves them; nothing reads it directly."
+  value       = aws_s3_bucket.media.bucket
+}
+
 output "web_log_group" {
   value = aws_cloudwatch_log_group.web.name
 }
