@@ -1,0 +1,129 @@
+{% extends "participant/base.html" %}
+{# Sign in (participant_ui = v2). Everyone signs in here, researchers too;
+   the server sends each account to its own dashboard, so there's no role to
+   pick. Signing in goes through /api/login, which answers 401 (no match),
+   423 (account locked for a while), or 429 (too many tries from this network). #}
+
+{% block title %}Sign in · Cloze{% endblock %}
+{% block menu %}{% endblock %}
+{% block tabs %}{% endblock %}
+{% block help_dialog %}{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen flex-col items-center px-5 py-8 sm:py-12">
+  <div class="flex items-center gap-2.5 self-center">
+    <img src="/static/images/logo.svg" alt="" class="h-9 w-9 rounded-lg">
+    <span class="text-lg font-semibold">Cloze</span>
+  </div>
+
+  <div class="flex w-full max-w-[400px] flex-1 flex-col justify-center gap-7 py-10">
+    <div class="flex flex-col gap-2">
+      <h1 class="text-[32px] font-semibold leading-tight tracking-tight">Sign in</h1>
+      <p class="text-base leading-relaxed text-p-ink-3">Use the username and password your study team gave you.</p>
+    </div>
+
+    <form id="sign-in" class="flex flex-col gap-4" novalidate>
+      <label class="flex flex-col gap-1.5 text-sm font-semibold text-p-ink-2">Username
+        <input id="username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required
+               class="min-h-12 rounded-xl border border-p-line-strong bg-p-surface px-3.5 text-base font-normal text-p-ink">
+      </label>
+      <div class="flex flex-col gap-1.5">
+        <label for="password" class="text-sm font-semibold text-p-ink-2">Password</label>
+        <div class="flex items-center rounded-xl border border-p-line-strong bg-p-surface focus-within:border-p-accent focus-within:shadow-[0_0_0_1px_var(--p-accent)]">
+          <input id="password" name="password" type="password" autocomplete="current-password" required
+                 class="min-h-12 min-w-0 flex-1 rounded-xl border-0 bg-transparent px-3.5 text-base text-p-ink focus:outline-none focus-visible:outline-none">
+          <button type="button" id="show-password" aria-pressed="false" aria-controls="password"
+                  class="mr-1.5 inline-flex min-h-9 items-center rounded-lg px-3 text-sm font-semibold text-p-accent-ink hover:bg-p-raised">Show</button>
+        </div>
+      </div>
+
+      <div id="sign-in-error" role="alert" class="hidden flex-col gap-1 rounded-2xl px-4 py-3"></div>
+
+      <button type="submit" id="sign-in-button"
+              class="mt-1 inline-flex min-h-12 items-center justify-center rounded-[14px] bg-p-accent px-5 text-base font-semibold text-p-on-accent hover:bg-p-accent-hover disabled:opacity-60">
+        Sign in
+      </button>
+    </form>
+
+    <p class="text-[15px] leading-relaxed text-p-ink-3">Forgot your password? Ask your study team, who can reset it.</p>
+  </div>
+
+  <div class="flex max-w-[400px] flex-col items-center gap-2 text-center">
+    <p class="text-sm leading-relaxed text-p-ink-3">If you're in crisis and need help right away, call or text <a href="tel:988" class="font-semibold text-p-help">988</a>, or call <a href="tel:911" class="font-semibold text-p-help">911</a>.</p>
+    <p class="text-[13px] text-p-hint">Researchers sign in here too.</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var form = document.getElementById("sign-in");
+  var username = document.getElementById("username");
+  var password = document.getElementById("password");
+  var show = document.getElementById("show-password");
+  var button = document.getElementById("sign-in-button");
+  var error = document.getElementById("sign-in-error");
+
+  show.addEventListener("click", function () {
+    var showing = password.type === "text";
+    password.type = showing ? "password" : "text";
+    show.textContent = showing ? "Show" : "Hide";
+    show.setAttribute("aria-pressed", String(!showing));
+  });
+
+  function say(kind, title, detail) {
+    error.innerHTML = "";
+    error.className = "flex flex-col gap-1 rounded-2xl px-4 py-3 " +
+      (kind === "locked" ? "bg-p-waiting-soft text-p-ink-2" : "bg-p-help-soft text-p-ink-2");
+    var strong = document.createElement("strong");
+    strong.className = "text-[15px] font-semibold " + (kind === "locked" ? "text-p-waiting" : "text-p-help");
+    strong.textContent = title;
+    error.appendChild(strong);
+    if (detail) {
+      var p = document.createElement("span");
+      p.className = "text-[15px] leading-relaxed";
+      p.textContent = detail;
+      error.appendChild(p);
+    }
+  }
+
+  form.addEventListener("submit", async function (event) {
+    event.preventDefault();
+    if (!username.value.trim() || !password.value) {
+      say("error", "Enter your username and password.");
+      (username.value.trim() ? password : username).focus();
+      return;
+    }
+    button.disabled = true;
+    try {
+      var response = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: username.value.trim(), password: password.value }),
+      });
+      var data = await response.json().catch(function () { return {}; });
+      if (response.ok && data.redirect) {
+        window.location.assign(data.redirect);
+        return;
+      }
+      if (response.status === 423) {
+        var mins = data.retry_after_minutes || 15;
+        say("locked", "Your account is locked for now",
+            "There were too many tries with the wrong password. Try again in " + mins +
+            (mins === 1 ? " minute" : " minutes") + ", or ask your study team to help.");
+      } else if (response.status === 429) {
+        say("error", "Too many sign-in attempts", "Please wait a minute, then try again.");
+      } else {
+        say("error", "That username and password don't match", "Check them and try again. Passwords are case-sensitive.");
+        password.value = "";
+        password.focus();
+      }
+    } catch (e) {
+      say("error", "Couldn't reach Cloze", "Check your connection and try again.");
+    }
+    button.disabled = false;
+  });
+})();
+</script>
+{% endblock %}

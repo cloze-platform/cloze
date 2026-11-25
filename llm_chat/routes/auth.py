@@ -46,7 +46,14 @@ def index():
 
 @auth_blp.route("/login")
 def login():
-    """Render the login page"""
+    """Render the login page. With the redesigned participant pages on
+    (participant_ui = v2), everyone signs in on the new page; researchers and
+    admins use it too."""
+    from ..utils.participant_ui import uses_v2
+    if uses_v2():
+        if current_user.is_authenticated:
+            return redirect(url_for('auth.index'))
+        return render_template("participant/sign_in.html")
     return render_template("login.html")
 
 @auth_blp.route("/admin/login")
@@ -83,7 +90,8 @@ def api_login():
             _record_failure(ip)
             remaining = int(user.locked_until - time.time())
             mins = max(1, remaining // 60)
-            return jsonify({'status': 'error', 'message': f'Account temporarily locked. Try again in {mins} minute(s).'}), 423
+            return jsonify({'status': 'error', 'message': f'Account temporarily locked. Try again in {mins} minute(s).',
+                            'retry_after_minutes': mins}), 423
 
         if user.check_password(data.get('password', '')):
             user.record_successful_login()
