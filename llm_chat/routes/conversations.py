@@ -14,6 +14,7 @@ from ..utils.settings_resolution import get_effective_setting, get_provider_id_f
 from ..utils.access_hours import within_access_window
 from ..services.greeting import resolve_greeting
 from ..services import participant_nav
+from ..services.conversation_end import end as end_conversation, stamp_window_closed
 from ..utils.participant_ui import uses_v2
 from .participant import render_home as render_participant_home
 
@@ -134,6 +135,8 @@ def get_conversation_data(conversation_id):
             window_end_date = window.end_date
             window_id = window.id
             window_status = window.compute_status()
+            if stamp_window_closed(conversation, window):
+                db.session.commit()
 
     # Turn limit info
     turn_info = {}
@@ -146,7 +149,7 @@ def get_conversation_data(conversation_id):
                 'max_turns': mt,
                 'turns_used': used,
                 'turns_remaining': max(0, mt - used),
-                'turn_limit_reached': used >= mt,
+                'turn_limit_reached': used >= mt or conversation.end_reason == Conversation.TURN_LIMIT,
             }
 
     return jsonify({
@@ -164,6 +167,8 @@ def get_conversation_data(conversation_id):
         'window_status': window_status,
         'window_id': window_id,
         'consent_provided': conversation.consent_provided,
+        'ended_at': conversation.ended_at,
+        'end_reason': conversation.end_reason,
         'messages': [m.to_dict() for m in messages],
         'greeting': resolve_greeting(conversation),
         **turn_info,
@@ -271,13 +276,18 @@ def send_message(conversation_id):
     if current_user.is_patient() and not conversation.window_id:
         return jsonify({'error': 'This conversation is not part of a study chat window'}), 403
 
-    # Check if conversation belongs to an expired window
-    if conversation.window_id:
-        window = db.session.get(ChatWindow, conversation.window_id)
-        if window:
-            status = window.compute_status()
-            if not window.visible or status != 'active':
-                return jsonify({'error': 'Chat window has expired or is no longer active'}), 403
+    # An ended conversation stays ended (services/conversation_end.py).
+    window = db.session.get(ChatWindow, conversation.window_id) if conversation.window_id else None
+    if stamp_window_closed(conversation, window):
+        db.session.commit()
+    if conversation.ended_at is not None:
+        return _ended_response(conversation)
+
+    # Check if conversation belongs to a window that isn't open
+    if window:
+        status = window.compute_status()
+        if not window.visible or status != 'active':
+            return jsonify({'error': 'Chat window has expired or is no longer active'}), 403
 
     # Max turns per conversation enforcement
     max_turns = None
@@ -412,6 +422,8 @@ def send_message(conversation_id):
     db.session.add(assistant_message)
 
     conversation.updated_at = time.time()
+    if max_turns and turns_remaining <= 0:
+        end_conversation(conversation, Conversation.TURN_LIMIT)
     db.session.commit()
 
     result = {'response': response_text, 'message_id': assistant_message.id}
@@ -420,6 +432,27 @@ def send_message(conversation_id):
         result['max_turns'] = max_turns
         result['turn_limit_reached'] = turns_remaining <= 0
     return jsonify(result)
+
+ENDED_MESSAGES = {
+    Conversation.TURN_LIMIT: 'This conversation has used all its turns.',
+    Conversation.WINDOW_CLOSED: 'This chat window has closed.',
+}
+
+
+def _ended_response(conversation):
+    """403 for a send to an ended conversation, saying why it ended."""
+    body = {
+        'error': ENDED_MESSAGES.get(conversation.end_reason, 'This conversation has ended.'),
+        'ended': True,
+        'end_reason': conversation.end_reason,
+    }
+    if conversation.end_reason == Conversation.TURN_LIMIT:
+        # Today's participant page shows its turn-limit notice for these.
+        body['turn_limit_reached'] = True
+        body['max_turns'] = get_effective_setting(
+            'max_turns_per_conversation', get_provider_id_for_patient(conversation.user_id))
+    return jsonify(body), 403
+
 
 @conv_bp.route("/api/save_selection", methods=["POST"])
 @login_required

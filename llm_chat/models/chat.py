@@ -56,6 +56,15 @@ class Conversation(db.Model):
     consent_provided = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.Float, default=lambda: time.time())
     updated_at = db.Column(db.Float, onupdate=lambda: time.time())
+    # When and why the conversation ended; NULL while it can still go on.
+    # Recorded, not worked out each time: reports and exports read the reason,
+    # and some reasons (a researcher closing it) can't be worked out later.
+    # See services/conversation_end.py.
+    ended_at = db.Column(db.Float, nullable=True)
+    end_reason = db.Column(db.String(32), nullable=True)
+
+    TURN_LIMIT = 'turn_limit'          # the participant used the last turn
+    WINDOW_CLOSED = 'window_closed'    # its chat window ended
 
     messages = db.relationship(
         'Message',
@@ -79,6 +88,8 @@ class Conversation(db.Model):
             'consent_provided': self.consent_provided,
             'created_at': self.created_at,
             'updated_at': self.updated_at,
+            'ended_at': self.ended_at,
+            'end_reason': self.end_reason,
         }
         if include_messages:
             data['messages'] = [

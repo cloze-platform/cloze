@@ -13,6 +13,7 @@ Works with both SQLite and PostgreSQL.
 import os
 import sys
 import sqlite3
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -64,6 +65,10 @@ COLUMN_ADDITIONS = [
     ('provider_feature_flags', 'greeting_asset_id', 'INTEGER'),
     ('flow_chats', 'greeting_text', 'TEXT'),
     ('flow_chats', 'greeting_asset_id', 'INTEGER'),
+    # Why a conversation ended (turn_limit, window_closed, ...). Conversations
+    # in windows that have already ended are marked after the update; see below.
+    ('conversations', 'ended_at', 'REAL'),
+    ('conversations', 'end_reason', 'VARCHAR(32)'),
 ]
 
 
@@ -159,6 +164,18 @@ def run_migration(apply=False):
         else:
             print(f"  NEW   table '{t}' — will be created by --apply")
 
+    # ── Conversations in windows that have already ended ─────
+    # (marked window_closed by --apply, after the columns exist)
+    if table_exists(cursor, 'conversations', db_type) and table_exists(cursor, 'chat_windows', db_type):
+        ended_filter = ("c.ended_at IS NULL AND " if column_exists(cursor, 'conversations', 'ended_at', db_type)
+                        else "")
+        cursor.execute(
+            "SELECT COUNT(*) FROM conversations c JOIN chat_windows w ON c.window_id = w.id "
+            f"WHERE {ended_filter}(w.end_date < {time.time()} "
+            "OR w.status IN ('generating_report', 'report_ready'))"
+        )
+        print(f"\n  {cursor.fetchone()[0]} conversation(s) in ended windows to mark as finished (window_closed)")
+
     # ── Apply or report ──────────────────────────────────────
     print()
     if not changes:
@@ -202,6 +219,16 @@ def run_migration(apply=False):
             print(f"Done. Linked {linked} chat(s).")
         except Exception as e:
             sys.exit(f"Linking chats failed: {e}")
+
+        # Conversations whose chat window ended before ended_at existed.
+        print("\nMarking conversations in ended windows as finished...")
+        try:
+            from llm_chat.services.conversation_end import backfill_window_closed
+            with app.app_context():
+                marked = backfill_window_closed()
+            print(f"Done. Marked {marked} conversation(s).")
+        except Exception as e:
+            sys.exit(f"Marking ended conversations failed: {e}")
 
 
 if __name__ == '__main__':
