@@ -44,12 +44,20 @@ class StudyFlow(db.Model):
 
 
 class FlowPhase(db.Model):
-    """A time-bounded phase within a study flow."""
+    """A phase within a study flow: one group of chats on the participant's
+    Home and menu. Phased flows date each phase; always-available flows can
+    have several undated ones. Recurring flows use only their first."""
     __tablename__ = 'flow_phases'
+
+    NAME_LIMIT = 200
+    DESCRIPTION_LIMIT = 300
+    DEFAULT_ALWAYS_NAME = 'Always Available'
 
     id = db.Column(db.Integer, primary_key=True)
     flow_id = db.Column(db.Integer, db.ForeignKey('study_flows.id'), nullable=False)
     name = db.Column(db.String(200), nullable=False)
+    # The line under the group's name on the participant's Home card.
+    description = db.Column(db.Text, nullable=True)
     order_index = db.Column(db.Integer, default=0)
 
     # Relative timing (days from enrollment)
@@ -64,6 +72,7 @@ class FlowPhase(db.Model):
         return {
             'id': self.id,
             'name': self.name,
+            'description': self.description,
             'order_index': self.order_index,
             'start_day': self.start_day,
             'end_day': self.end_day,

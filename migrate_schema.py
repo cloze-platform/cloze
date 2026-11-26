@@ -74,6 +74,8 @@ COLUMN_ADDITIONS = [
     ('messages', 'client_message_id', 'VARCHAR(64)'),
     # Closed hours on the new participant pages: 'lock' (NULL) or 'read_only'.
     ('provider_feature_flags', 'access_hours_mode', 'VARCHAR(16)'),
+    # Stage 2 groups: the line under a group's name on the participant's Home.
+    ('flow_phases', 'description', 'TEXT'),
 ]
 
 # ── Indexes on existing tables ───────────────────────────────────
