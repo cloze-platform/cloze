@@ -17,7 +17,7 @@ from .routes.participant import participant_bp
 from flask_smorest import Api
 
 # The release this code is (CHANGELOG.md; tests/test_version.py keeps the two in step).
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 # Load variables from .env - use explicit path to ensure it's found
 # Get the project root directory (two levels up from this file)

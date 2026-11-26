@@ -131,7 +131,7 @@
     <form id="windowForm" class="space-y-5">
       <div id="modalPatientSelect" class="hidden">
         <label class="mb-1 block font-semibold">Participant</label>
-        <select id="modalPatientId" required class="w-full rounded-md border-2 border-stone-200 px-3 py-2 outline-none focus:border-cloze-indigo">
+        <select id="modalPatientId" class="w-full rounded-md border-2 border-stone-200 px-3 py-2 outline-none focus:border-cloze-indigo">
           <option value="">Select a participant...</option>
         </select>
       </div>
@@ -701,15 +701,12 @@
     document.getElementById('templatesEditor').innerHTML = '';
 
     // Show patient selector if no patient is currently selected
-    var patientSelectDiv = document.getElementById('modalPatientSelect');
     if (!currentPatient) {
       var sel = document.getElementById('modalPatientId');
       sel.innerHTML = '<option value="">Select a participant...</option>' +
         patients.map(function(p) { return '<option value="' + p.id + '">' + escapeHtml(p.username) + '</option>'; }).join('');
-      patientSelectDiv.classList.remove('hidden');
-    } else {
-      patientSelectDiv.classList.add('hidden');
     }
+    showPatientSelect(!currentPatient);
 
     // Reset report type and feature checkboxes to defaults
     setupReportTypeRadios('window', 'summary');
@@ -718,6 +715,13 @@
     addTemplateEditor();
     document.getElementById('windowModal').classList.remove('hidden');
     document.getElementById('windowModal').classList.add('flex');
+  }
+
+  // Required only while shown: a hidden required field blocks the form
+  // without saying why.
+  function showPatientSelect(show) {
+    document.getElementById('modalPatientSelect').classList.toggle('hidden', !show);
+    document.getElementById('modalPatientId').required = show;
   }
 
   function closeModal() {
@@ -733,6 +737,7 @@
       const w = await res.json();
 
       currentWindowId = windowId;
+      showPatientSelect(false);  // a window's participant doesn't change
       document.getElementById('modalTitle').textContent = 'Edit Chat Window';
       document.getElementById('windowTitle').value = w.title || '';
       document.getElementById('windowDescription').value = w.description || '';
@@ -756,6 +761,7 @@
         w.templates.forEach((t, i) => {
           addTemplateEditor();
           const el = document.querySelectorAll('.template-editor-item')[i];
+          el.dataset.templateId = t.id;  // saved in place, so started chats stay linked
           el.querySelector('.template-title-input').value = t.title || '';
           el.querySelector('.template-purpose-input').value = t.purpose || '';
           el.querySelector('.template-model-select').value = t.model_id || '';
@@ -832,6 +838,7 @@
     const templates = [];
     document.querySelectorAll('.template-editor-item').forEach(item => {
       templates.push({
+        id: item.dataset.templateId ? parseInt(item.dataset.templateId) : null,
         title: item.querySelector('.template-title-input').value,
         purpose: item.querySelector('.template-purpose-input').value,
         model_id: parseInt(item.querySelector('.template-model-select').value),

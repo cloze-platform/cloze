@@ -6,6 +6,14 @@ Cloze is still in 0.x: a minor release (0.6 → 0.7) can change behaviour, setti
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-25
+
+Two fixes to the researcher's chat-window form. No database changes and nothing to do on upgrade.
+
+### Fixed
+- Editing a chat window replaced every chat in it with a new one. On Postgres, the save failed once a participant had chatted in the window. On SQLite it went through, but the participant's started exercises showed as not started. Either way, the new chats lost their link to the study design and their message limit. Chats are now updated in place, and a removed chat that someone has used is hidden instead of deleted.
+- The chat-window form couldn't be saved when creating a window from a participant's page, or when editing a window.
+
 ## [0.6.0] - 2026-11-25
 
 The first stage of the participant redesign, a researcher media library, and a round of safety and security fixes. **The new participant interface is opt-in**: participants keep today's pages until an admin turns it on.
@@ -90,7 +98,8 @@ The first release from cloze-platform:
 
 The cloze.uk production baseline.
 
-[Unreleased]: https://github.com/cloze-platform/cloze/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/cloze-platform/cloze/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/cloze-platform/cloze/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/cloze-platform/cloze/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/cloze-platform/cloze/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/cloze-platform/cloze/compare/v0.4.0...v0.5.0
