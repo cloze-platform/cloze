@@ -246,3 +246,13 @@ def test_no_notebook_when_saving_is_off(study, login_as, v2, db):
 def test_nothing_to_save_from_before_a_conversation_exists(study, login_as, v2, approved):
     html = login_as(study["patient"]).get(f"/exercise/template/{study['checkin'].id}").get_data(as_text=True)
     assert '<aside id="panel"' in html and "data-save-to" not in html
+
+
+def test_a_message_whose_reply_failed_offers_try_again(study, login_as, v2, db):
+    _agreed(db, study["thoughts_conv"])
+    db.session.add(Message(conversation_id=study["thoughts_conv"].id, role="user", content="Still here?",
+                           timestamp=1_800_000_001, client_message_id="saved-without-reply"))
+    db.session.commit()
+    main = _page(login_as(study["patient"]), _url(study["thoughts_conv"]))
+    assert 'data-client-id="saved-without-reply" data-pending-reply' in main
+    assert "Saved. The reply didn't come through." in main and "data-retry" in main

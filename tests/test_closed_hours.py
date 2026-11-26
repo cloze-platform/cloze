@@ -19,10 +19,8 @@ def hours(study, db, monkeypatch):
     db.session.add_all([flags, SafetyPlan(patient_id=study["patient"].id, status="active")])
     study["thoughts_conv"].consent_provided = True
     db.session.commit()
-    from llm_chat.routes import conversations
     from llm_chat.utils import access_hours
     monkeypatch.setattr(access_hours, "within_access_window", lambda *a, **k: False)
-    monkeypatch.setattr(conversations, "within_access_window", lambda *a, **k: False)
 
     def set_mode(mode):
         flags.access_hours_mode = mode

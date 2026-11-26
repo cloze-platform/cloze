@@ -54,8 +54,11 @@
     if (greeting) greeting.remove();
     var wrap = el("div", "flex flex-col items-end gap-1");
     wrap.dataset.clientId = clientId;
-    wrap.appendChild(el("div", "max-w-[82%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-p-accent-soft px-4 py-2.5 text-base leading-relaxed", text));
+    var bubble = el("div", "max-w-[82%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-p-accent-soft px-4 py-2.5 text-base leading-relaxed", text);
+    bubble.setAttribute("data-bubble", "");
+    wrap.appendChild(bubble);
     var status = el("div", "flex flex-wrap items-center justify-end gap-x-3 gap-y-1 pr-1 text-xs text-p-hint");
+    status.setAttribute("data-status", "");
     status.appendChild(el("time", "", now()));
     wrap.appendChild(status);
     list.appendChild(wrap);
@@ -111,35 +114,38 @@
     }
   }
 
-  // ── A message that couldn't be sent ──
-  function markFailed(wrap, text, reason, canRetry) {
-    var status = wrap.lastChild;
+  // ── A message without a reply ──
+  // retry: send it again with the same id (the server never saves it twice).
+  // edit: put the text back in the reply box; only when it wasn't saved.
+  // reload: show the page again, which says why replying stopped.
+  function markFailed(wrap, text, reason, opts) {
+    var status = wrap.querySelector("[data-status]");
     status.textContent = "";
-    var note = el("span", "font-medium text-p-help", "Not sent. " + reason);
-    status.appendChild(note);
-    if (canRetry) {
-      var retry = el("button", "min-h-8 rounded-lg px-2 font-semibold text-p-accent-ink hover:bg-p-raised", "Try again");
-      retry.type = "button";
-      retry.addEventListener("click", function () { deliver(wrap, text, wrap.dataset.clientId); });
-      status.appendChild(retry);
+    status.appendChild(el("span", "font-medium text-p-help", reason));
+    function action(label, handler) {
+      var button = el("button", "min-h-8 rounded-lg px-2 font-semibold text-p-accent-ink hover:bg-p-raised", label);
+      button.type = "button";
+      button.addEventListener("click", handler);
+      status.appendChild(button);
     }
-    var edit = el("button", "min-h-8 rounded-lg px-2 font-semibold text-p-accent-ink hover:bg-p-raised", "Edit");
-    edit.type = "button";
-    edit.addEventListener("click", function () {
-      wrap.remove();
-      input.value = text;
-      grow();
-      input.focus();
-    });
-    status.appendChild(edit);
-    announce("Your message wasn't sent. " + reason);
+    if (opts.retry) action("Try again", function () { deliver(wrap, text, wrap.dataset.clientId); });
+    if (opts.edit) {
+      action("Edit", function () {
+        wrap.remove();
+        input.value = text;
+        grow();
+        input.focus();
+      });
+    }
+    if (opts.reload) action("See why", function () { window.location.reload(); });
+    announce(reason);
   }
 
   async function deliver(wrap, text, clientId) {
     if (busy) return;
     busy = true;
     send.disabled = true;
-    var status = wrap.lastChild;
+    var status = wrap.querySelector("[data-status]");
     status.textContent = "";
     status.appendChild(el("span", "", "Sending…"));
     showWaiting();
@@ -164,6 +170,7 @@
       status.textContent = "";
       status.appendChild(el("time", "", now()));
       wrap.dataset.messageId = data.user_message_id;
+      delete wrap.dataset.pendingReply;
       addReply(data.response, data.message_id);
       announce("New reply.");
       updateTurns(data.turns_remaining);
@@ -173,15 +180,29 @@
       return;
     }
     if (!response) {
-      markFailed(wrap, text, "Check your connection.", true);
+      markFailed(wrap, text, "Couldn't reach Cloze. Check your connection.", { retry: true, edit: true });
+    } else if (data.saved) {
+      // Saved on the server; only the reply is missing.
+      wrap.dataset.messageId = data.user_message_id;
+      markFailed(wrap, text, "Saved. The reply didn't come through.", { retry: true });
+    } else if (data.in_progress) {
+      markFailed(wrap, text, "Still sending. Wait a moment, then try again.", { retry: true });
     } else if (response.status === 403 && (data.ended || data.turn_limit_reached)) {
-      window.location.reload();            // the server shows why it ended
-    } else if (response.status === 502 || response.status >= 500) {
-      markFailed(wrap, text, "The reply didn't come through.", true);
+      markFailed(wrap, text, "Not sent. " + (data.error || "This conversation has ended."), { reload: true });
+    } else if (response.status >= 500) {
+      markFailed(wrap, text, "The reply didn't come through.", { retry: true, edit: true });
     } else {
-      markFailed(wrap, text, data.error || "Something went wrong.", false);
+      markFailed(wrap, text, "Not sent. " + (data.error || "Something went wrong."), { edit: true });
     }
   }
+
+  // A message saved earlier whose reply never came (shown by the server).
+  list.querySelectorAll("[data-pending-reply]").forEach(function (wrap) {
+    var text = wrap.querySelector("[data-bubble]").textContent;
+    wrap.querySelector("[data-retry]").addEventListener("click", function () {
+      deliver(wrap, text, wrap.dataset.clientId);
+    });
+  });
 
   form.addEventListener("submit", function (event) {
     event.preventDefault();

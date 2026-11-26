@@ -66,9 +66,19 @@
     {% elif messages %}
       {% for m in messages %}
         {% if m.role == "user" %}
-          <div class="flex flex-col items-end gap-1" data-message-id="{{ m.id }}">
-            <div class="max-w-[82%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-p-accent-soft px-4 py-2.5 text-base leading-relaxed">{{ m.content }}</div>
-            <time class="pr-1 text-xs text-p-hint" datetime="{{ m.timestamp|p_iso }}">{{ m.timestamp|p_when(nav.timezone) }}</time>
+          {# The last message, saved without a reply (the reply failed): offer Try again. #}
+          {% set unanswered = loop.last and m.client_message_id and state == "open" %}
+          <div class="flex flex-col items-end gap-1" data-message-id="{{ m.id }}"
+               {% if unanswered %}data-client-id="{{ m.client_message_id }}" data-pending-reply{% endif %}>
+            <div data-bubble class="max-w-[82%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-p-accent-soft px-4 py-2.5 text-base leading-relaxed">{{ m.content }}</div>
+            {% if unanswered %}
+              <div data-status class="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 pr-1 text-xs text-p-hint">
+                <span class="font-medium text-p-help">Saved. The reply didn't come through.</span>
+                <button type="button" data-retry class="min-h-8 rounded-lg px-2 font-semibold text-p-accent-ink hover:bg-p-raised">Try again</button>
+              </div>
+            {% else %}
+              <time class="pr-1 text-xs text-p-hint" datetime="{{ m.timestamp|p_iso }}">{{ m.timestamp|p_when(nav.timezone) }}</time>
+            {% endif %}
           </div>
         {% else %}
           <div class="flex flex-col gap-1" data-message-id="{{ m.id }}">
@@ -100,7 +110,7 @@
       <form id="composer" data-conversation-id="{{ exercise.conversation_id }}"
             class="flex items-end gap-2 rounded-[28px] border border-p-line-strong bg-p-surface py-1.5 pl-5 pr-1.5 shadow-[0_1px_2px_rgba(24,24,31,0.04),0_8px_24px_rgba(24,24,31,0.05)] focus-within:border-p-accent focus-within:shadow-[0_0_0_1px_var(--p-accent)]">
         <label for="reply" class="sr-only">Your reply</label>
-        <textarea id="reply" name="message" rows="1" required autocomplete="off" placeholder="Write your reply…"
+        <textarea id="reply" name="message" rows="1" required autocomplete="off" maxlength="10000" placeholder="Write your reply…"
                   class="max-h-48 min-w-0 flex-1 resize-none self-center border-0 bg-transparent py-2.5 text-base leading-normal text-p-ink outline-none placeholder:text-p-hint focus:outline-none focus-visible:outline-none"></textarea>
         <button type="submit" id="send" aria-label="Send"
                 class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-p-accent text-p-on-accent hover:bg-p-accent-hover disabled:cursor-not-allowed disabled:opacity-50">

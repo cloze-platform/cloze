@@ -21,11 +21,14 @@ except ImportError:
     genai = None
 
 class LLMCallError(RuntimeError):
-    """The model didn't reply. user_message is safe to show a participant."""
+    """The model didn't reply. user_message is safe to show a participant.
+    retryable is False when trying again won't help: the provider blocked the
+    content (a safety filter), as opposed to being down or busy."""
 
-    def __init__(self, user_message):
+    def __init__(self, user_message, retryable=True):
         super().__init__(user_message)
         self.user_message = user_message
+        self.retryable = retryable
 
 
 class LLMInterface:
@@ -273,16 +276,18 @@ class LLMInterface:
             cls._dump_error_debug(model, formatted_messages, e, config)
             # Show a friendly message to the user, not the raw error
             err_str = str(e)
+            blocked = False
             if '503' in err_str or 'UNAVAILABLE' in err_str:
                 result = "I'm temporarily unavailable due to high demand. Please try sending your message again in a moment."
             elif '429' in err_str or 'RESOURCE_EXHAUSTED' in err_str:
                 result = "I'm receiving too many requests right now. Please wait a moment and try again."
             elif 'SAFETY' in err_str or 'blocked' in err_str.lower():
+                blocked = True
                 result = "I wasn't able to generate a response to that. Could you try rephrasing?"
             else:
                 result = "Something went wrong on my end. Please try again, and if the problem persists, let your provider know."
             if raise_on_error:
-                raise LLMCallError(result) from e
+                raise LLMCallError(result, retryable=not blocked) from e
 
         response_time = time.time() - start_time
         return result, response_time
