@@ -6,12 +6,6 @@ from llm_chat.models import AdminSettings, SavedSelection
 
 
 @pytest.fixture
-def v2(db):
-    db.session.add(AdminSettings(setting_name="participant_ui", setting_value="v2"))
-    db.session.commit()
-
-
-@pytest.fixture
 def lines(study, db):
     made = [
         SavedSelection(user_id=study["patient"].id, conversation_id=study["thoughts_conv"].id,

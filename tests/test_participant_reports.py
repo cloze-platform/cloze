@@ -9,12 +9,6 @@ from llm_chat.models import AdminSettings, ProviderFeatureFlags, Report
 PAYLOAD = '<img src=x onerror="alert(1)">'
 
 
-@pytest.fixture
-def v2(db):
-    db.session.add(AdminSettings(setting_name="participant_ui", setting_value="v2"))
-    db.session.commit()
-
-
 def _report(db, study, window, report_type="summary", patient=None, summary="A good week."):
     data = {"report_type": report_type, "generated_at": 0, "window_title": window.title,
             "summary": {"total_conversations": 1, "total_user_messages": 2, "total_model_messages": 2},

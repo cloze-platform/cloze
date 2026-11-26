@@ -9,12 +9,6 @@ from llm_chat.models import AdminSettings, ProviderFeatureFlags, SafetyPlan
 PAGES = ["/help", "/exercises", "/notebook", "/safety-plan", "/reports"]
 
 
-@pytest.fixture
-def v2(db):
-    db.session.add(AdminSettings(setting_name="participant_ui", setting_value="v2"))
-    db.session.commit()
-
-
 def _approve_plan(db, study, **sections):
     plan = SafetyPlan(patient_id=study["patient"].id, status="active")
     for name, value in sections.items():
@@ -223,7 +217,7 @@ def test_home_leads_with_the_safety_plan_step(study, login_as, v2, db, statuses,
         db.session.add(SafetyPlan(patient_id=study["patient"].id, status=status))
     db.session.commit()
     home = _home(login_as(study["patient"]))
-    assert f'<h1 id="step-heading"' in home and heading in home
+    assert '<h1 id="step-heading"' in home and heading in home
     assert (link in home) if link else ("Continue my safety plan" not in home)
     assert "These open once your care team approves your safety plan." in home
     assert f'/exercise/template/{study["checkin"].id}"' not in home         # locked

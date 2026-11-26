@@ -1,16 +1,8 @@
 """The Safety plan page: each state, what it shows, and the save-for-later flag."""
 
-import json
-
 import pytest
 
-from llm_chat.models import AdminSettings, ProviderFeatureFlags, SafetyPlan
-
-
-@pytest.fixture
-def v2(db):
-    db.session.add(AdminSettings(setting_name="participant_ui", setting_value="v2"))
-    db.session.commit()
+from llm_chat.models import ProviderFeatureFlags, SafetyPlan
 
 
 def _plan(db, study, status, **sections):

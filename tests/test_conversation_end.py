@@ -2,7 +2,7 @@
 
 import pytest
 
-from conftest import DAY, NOW
+from conftest import NOW
 from llm_chat.models import Conversation, ProviderFeatureFlags, SafetyPlan
 from llm_chat.services import participant_nav
 from llm_chat.services.conversation_end import backfill_window_closed, end, stamp_window_closed

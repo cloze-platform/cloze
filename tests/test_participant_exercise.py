@@ -7,12 +7,6 @@ from llm_chat.services.conversation_end import end
 
 
 @pytest.fixture
-def v2(db):
-    db.session.add(AdminSettings(setting_name="participant_ui", setting_value="v2"))
-    db.session.commit()
-
-
-@pytest.fixture
 def approved(db, study):
     db.session.add(SafetyPlan(patient_id=study["patient"].id, status="active"))
     db.session.commit()

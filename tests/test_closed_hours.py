@@ -6,12 +6,6 @@ from llm_chat.models import AdminSettings, ProviderFeatureFlags, SafetyPlan
 
 
 @pytest.fixture
-def v2(db):
-    db.session.add(AdminSettings(setting_name="participant_ui", setting_value="v2"))
-    db.session.commit()
-
-
-@pytest.fixture
 def hours(study, db, monkeypatch):
     """Opening hours on, and closed right now. Returns a setter for the mode."""
     flags = ProviderFeatureFlags(provider_id=study["provider"].id, access_hours_enabled=True,

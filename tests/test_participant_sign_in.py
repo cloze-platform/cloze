@@ -4,14 +4,6 @@ import time
 
 import pytest
 
-from llm_chat.models import AdminSettings
-
-
-@pytest.fixture
-def v2(db):
-    db.session.add(AdminSettings(setting_name="participant_ui", setting_value="v2"))
-    db.session.commit()
-
 
 def test_v1_keeps_todays_sign_in(client):
     html = client.get("/login").get_data(as_text=True)
