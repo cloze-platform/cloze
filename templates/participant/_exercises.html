@@ -113,6 +113,7 @@
       <summary class="flex min-h-[62px] cursor-pointer list-none items-center gap-2.5 px-4 [&::-webkit-details-marker]:hidden">
         <span class="flex min-w-0 flex-1 flex-col">
           <span class="text-base font-semibold text-p-ink">{{ group.name }}</span>
+          {% if group.blurb %}<span class="text-sm text-p-ink-3">{{ group.blurb }}</span>{% endif %}
           <span class="text-[13px] text-p-hint">{{ group_summary(nav, group) }}</span>
         </span>
         <span class="text-p-hint transition-transform group-open/g:rotate-180">{{ icon("chevron-down", 18, "", 2) }}</span>

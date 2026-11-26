@@ -10,7 +10,7 @@
 {% set plan = nav.safety_plan %}
 {% set hours = nav.opening_hours %}
 {% set any_begun = nav.exercises|rejectattr("state", "equalto", "not_started")|list %}
-{% set open_groups = nav.open_groups|sort(attribute="window.start_date")|selectattr("exercises")|list %}
+{% set open_groups = nav.menu_groups|selectattr("is_open")|selectattr("exercises")|list %}
 {% set preparing = nav.preparing_reports %}
 
 <div class="mx-auto flex max-w-3xl flex-col gap-10 px-5 pb-14 pt-7 sm:px-8 lg:pt-12">
@@ -93,6 +93,7 @@
             <h3 id="group-{{ group.id }}" class="text-base font-semibold">{{ group.name }}</h3>
             <span class="text-[13px] text-p-hint">{{ group_summary(nav, group) }}</span>
           </div>
+          {% if group.blurb %}<p class="px-4 text-sm text-p-ink-3">{{ group.blurb }}</p>{% endif %}
           {% if group.closes_at and group.closes_at - nav.now < 30 * 86400 %}
             <p class="px-4 text-[13px] text-p-hint">Open until <time datetime="{{ group.closes_at|p_iso }}">{{ group.closes_at|p_when(nav.timezone) }}</time></p>
           {% endif %}
