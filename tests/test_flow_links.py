@@ -84,6 +84,10 @@ def test_deleting_a_phase_unlinks_participant_chats(login_as, provider, patient,
     phase = FlowPhase.query.one()
     assert login_as(provider).delete(f"/api/provider/phases/{phase.id}", headers=JSON_HEADERS).status_code == 200
     assert [t.flow_chat_id for t in ChatTemplate.query.all()] == [None, None]
+    # The participant's window stays, with its title; only its phase link goes.
+    # (Postgres enforces the foreign key; SQLite in the other tests doesn't.)
+    window = ChatWindow.query.one()
+    assert (window.title, window.phase_id) == ("Phase 1", None)
 
 
 def test_backfill_links_only_unambiguous_matches(provider, patient, flow, model):

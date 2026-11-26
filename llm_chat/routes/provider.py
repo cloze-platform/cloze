@@ -831,6 +831,10 @@ def delete_phase(phase_id):
         abort(403)
 
     _unlink_templates([c.id for c in phase.chats])
+    # Participants' windows generated from this phase stay (they're their
+    # record), keeping their title and label; only the link to the phase goes.
+    # Postgres enforces the foreign key, so without this the delete fails.
+    ChatWindow.query.filter_by(phase_id=phase.id).update({'phase_id': None}, synchronize_session=False)
     db.session.delete(phase)
     db.session.commit()
     return jsonify({'status': 'success'})
