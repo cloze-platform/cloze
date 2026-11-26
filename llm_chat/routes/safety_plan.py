@@ -10,6 +10,47 @@ safety_bp = Blueprint("safety_plan", __name__, url_prefix="/api/safety-plan")
 
 # ── Patient endpoints ──────────────────────────────────────────
 
+# The participant's sections: the fields each entry may have, and which are
+# 1-5 ratings (the prompt reads them). Anything else is dropped. Bad shapes are
+# refused, because these lists are rendered on every participant page (Get
+# help now) and fed to the prompt.
+PATIENT_SECTIONS = {
+    'warning_signs': {'text': ('sign', 'context'), 'ratings': ('severity',), 'required': 'sign'},
+    'coping_strategies': {'text': ('strategy', 'context', 'patient_language'), 'ratings': ('effectiveness',),
+                          'required': 'strategy'},
+    'support_network': {'text': ('person', 'relationship', 'contact_preference'), 'ratings': ('comfort_level',),
+                        'required': 'person'},
+    'reasons_for_living': {'text': ('reason', 'context'), 'ratings': (), 'required': 'reason'},
+}
+MAX_ENTRIES, MAX_TEXT = 50, 500
+
+
+def _clean_section(name, items):
+    """The section as a list of clean entries. Raises ValueError for a bad shape."""
+    spec = PATIENT_SECTIONS[name]
+    if not isinstance(items, list) or len(items) > MAX_ENTRIES:
+        raise ValueError(f'{name} must be a list of up to {MAX_ENTRIES} entries')
+    cleaned = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise ValueError(f'Each {name} entry must be an object')
+        entry = {}
+        for field in spec['text']:
+            value = item.get(field, '')
+            if value is None:
+                value = ''
+            if not isinstance(value, str) or len(value) > MAX_TEXT:
+                raise ValueError(f'{name}.{field} must be text of up to {MAX_TEXT} characters')
+            entry[field] = value.strip()
+        for field in spec['ratings']:
+            value = item.get(field, 3)
+            if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 5:
+                raise ValueError(f'{name}.{field} must be a whole number from 1 to 5')
+            entry[field] = value
+        if entry[spec['required']]:
+            cleaned.append(entry)
+    return cleaned
+
 @safety_bp.route("/", methods=["GET"])
 @login_required
 def get_my_plan():
@@ -39,6 +80,10 @@ def update_patient_sections():
         abort(403)
 
     data = request.json or {}
+    try:
+        sections = {name: _clean_section(name, data[name]) for name in PATIENT_SECTIONS if name in data}
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
 
     # Find the plan to update: draft first, then create a new pending version from active
     plan = SafetyPlan.query.filter_by(
@@ -68,14 +113,8 @@ def update_patient_sections():
         db.session.add(plan)
 
     # Update patient sections
-    if 'warning_signs' in data:
-        plan.set_warning_signs(data['warning_signs'])
-    if 'coping_strategies' in data:
-        plan.set_coping_strategies(data['coping_strategies'])
-    if 'support_network' in data:
-        plan.set_support_network(data['support_network'])
-    if 'reasons_for_living' in data:
-        plan.set_reasons_for_living(data['reasons_for_living'])
+    for name, entries in sections.items():
+        getattr(plan, f'set_{name}')(entries)
 
     # If this was a draft and patient sections are now complete, move to
     # pending_review. "submit": false saves a draft without sending it (the
@@ -100,8 +139,11 @@ def add_patient_anti_pattern():
         return jsonify({'error': 'Adding anti-patterns is currently disabled by your administrator.'}), 403
 
     data = request.json or {}
-    if not data.get('pattern'):
+    pattern, reason = data.get('pattern'), data.get('reason') or ''
+    if not isinstance(pattern, str) or not pattern.strip():
         return jsonify({'error': 'Pattern text is required'}), 400
+    if not isinstance(reason, str) or len(pattern) > MAX_TEXT or len(reason) > MAX_TEXT:
+        return jsonify({'error': f'Pattern and reason must be text of up to {MAX_TEXT} characters'}), 400
 
     # Find the editable plan
     plan = SafetyPlan.query.filter_by(
@@ -131,8 +173,8 @@ def add_patient_anti_pattern():
 
     anti_patterns = plan.get_anti_patterns()
     anti_patterns.append({
-        'pattern': data['pattern'],
-        'reason': data.get('reason', ''),
+        'pattern': pattern.strip(),
+        'reason': reason.strip(),
         'severity': 2,  # moderate default
         'source': 'patient',
         'visible_to_patient': True,
