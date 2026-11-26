@@ -76,6 +76,10 @@ COLUMN_ADDITIONS = [
     ('provider_feature_flags', 'access_hours_mode', 'VARCHAR(16)'),
     # Stage 2 groups: the line under a group's name on the participant's Home.
     ('flow_phases', 'description', 'TEXT'),
+    # Stage 2 speakers: a chat's cast (JSON list of speaker ids) and main
+    # speaker. The speakers table itself is new.
+    ('flow_chats', 'speaker_ids', 'TEXT'),
+    ('flow_chats', 'main_speaker_id', 'INTEGER'),
 ]
 
 # ── Indexes on existing tables ───────────────────────────────────
@@ -188,7 +192,7 @@ def run_migration(apply=False):
     # ── Check for new tables (will be created by db.create_all) ──
     new_tables = ['safety_plans', 'audit_log', 'escalation_events', 'provider_feature_flags',
                    'study_flows', 'flow_phases', 'flow_chats', 'flow_enrollments',
-                   'media_assets', 'media_renditions']
+                   'media_assets', 'media_renditions', 'speakers']
     print()
     for t in new_tables:
         if table_exists(cursor, t, db_type):

@@ -1,3 +1,4 @@
+import json
 import time
 from ..extensions import db
 
@@ -99,6 +100,13 @@ class FlowChat(db.Model):
     greeting_text = db.Column(db.Text, nullable=True)
     greeting_asset_id = db.Column(db.Integer, db.ForeignKey('media_assets.id', ondelete='SET NULL'),
                                   nullable=True)
+    # The chat's cast: a JSON list of the researcher's Speaker ids, in order,
+    # and the main speaker (one of them, or none). Only chats with a cast have
+    # their replies split by speaker. Read when the chat is shown, like the
+    # greeting. A JSON list rather than a join table: deleted speakers are
+    # skipped, and no foreign key can block deleting either side.
+    speaker_ids = db.Column(db.Text, nullable=True)
+    main_speaker_id = db.Column(db.Integer, nullable=True)
 
     # Relationships
     model = db.relationship('Model')
@@ -119,7 +127,18 @@ class FlowChat(db.Model):
             'order_index': self.order_index,
             'greeting_text': self.greeting_text,
             'greeting_asset': self.greeting_asset.to_dict() if self.greeting_asset else None,
+            'speaker_ids': self.cast_ids,
+            'main_speaker_id': self.main_speaker_id,
         }
+
+    @property
+    def cast_ids(self):
+        """The cast's speaker ids, in order ([] when there's no cast)."""
+        try:
+            ids = json.loads(self.speaker_ids) if self.speaker_ids else []
+        except (TypeError, ValueError):
+            return []
+        return [i for i in ids if isinstance(i, int) and not isinstance(i, bool)] if isinstance(ids, list) else []
 
 
 class FlowEnrollment(db.Model):

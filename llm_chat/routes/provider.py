@@ -14,6 +14,7 @@ from ..models import (User, Conversation, ProviderPatient, ProviderSettings,
                       StudyFlow, FlowPhase, FlowChat, FlowEnrollment, Model)
 from ..utils.settings_resolution import get_effective_setting
 from ..services.greeting import apply_greeting_fields
+from ..services.speakers import apply_cast_fields
 
 provider_bp = Blueprint("provider", __name__, url_prefix="")
 
@@ -950,6 +951,7 @@ def create_flow_chat(phase_id):
     )
     try:
         apply_greeting_fields(chat, data, current_user)
+        apply_cast_fields(chat, data, current_user)
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
     db.session.add(chat)
@@ -990,6 +992,7 @@ def update_flow_chat(chat_id):
             setattr(chat, key, data[key])
     try:
         apply_greeting_fields(chat, data, current_user)
+        apply_cast_fields(chat, data, current_user)
     except ValueError as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 400
