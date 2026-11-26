@@ -179,7 +179,8 @@
 
       {# Add phase — just text #}
       <div id="addPhaseArea" class="hidden mt-6">
-        <button onclick="addPhase()" class="add-trigger text-sm">+ Add phase</button>
+        <button id="addPhaseButton" onclick="addPhase()" class="add-trigger text-sm">+ Add phase</button>
+        <p id="addPhaseHint" class="hidden mt-1 text-xs text-stone-400">Each group is a card on the participant's Home and a section of their menu, in this order. A flow with one group shows under the flow's name.</p>
       </div>
     </div>
 
@@ -274,7 +275,9 @@
 
     // Show config bar for all types
     document.getElementById('recurringSettings').classList.toggle('hidden', f.flow_type !== 'recurring');
-    document.getElementById('addPhaseArea').classList.toggle('hidden', f.flow_type !== 'phased');
+    document.getElementById('addPhaseArea').classList.toggle('hidden', f.flow_type === 'recurring');
+    document.getElementById('addPhaseButton').textContent = f.flow_type === 'always' ? '+ Add group' : '+ Add phase';
+    document.getElementById('addPhaseHint').classList.toggle('hidden', f.flow_type !== 'always');
 
     if (f.flow_type === 'recurring') {
       document.getElementById('cadenceDays').value = f.cadence_days || 7;
@@ -367,8 +370,9 @@
       return;
     }
 
-    // For always/recurring — flat chat list, no phase headers
-    if (f.flow_type !== 'phased') {
+    // Recurring, and always-available flows with one group: a flat chat list,
+    // no group headers (the group shows under the flow's name).
+    if (f.flow_type === 'recurring' || (f.flow_type === 'always' && f.phases.length < 2)) {
       var allChats = [];
       f.phases.forEach(function(p) { allChats = allChats.concat(p.chats); });
       var phaseId = f.phases[0] ? f.phases[0].id : null;
@@ -389,19 +393,30 @@
       return;
     }
 
-    // Phased — full phase headers with accent bars
+    // Phased flows, and always-available flows with several groups: a header
+    // per group, with its card line and its place in the order.
+    var phased = f.flow_type === 'phased';
     container.innerHTML = f.phases.map(function(phase, pi) {
-      var color = PHASE_COLORS[pi % PHASE_COLORS.length];
-      var timing = '<span class="text-stone-300 ml-2 text-sm font-normal">Day ' + phase.start_day + (phase.end_day ? '–' + phase.end_day : '+') + '</span>';
+      var timing = phased ? '<span class="text-stone-300 ml-2 text-sm font-normal">Day ' + phase.start_day + (phase.end_day ? '–' + phase.end_day : '+') + '</span>' : '';
+      var noun = phased ? 'phase' : 'group';
 
-      var html = '<div class="phase-group flex gap-3 mb-8" data-phase-index="' + pi + '" onmouseenter="highlightPhase(' + pi + ')" onmouseleave="unhighlightPhase(' + pi + ')">';
+      var html = '<div class="phase-group flex gap-3 mb-8" data-phase-index="' + pi + '"' +
+        (phased ? ' onmouseenter="highlightPhase(' + pi + ')" onmouseleave="unhighlightPhase(' + pi + ')"' : '') + '>';
       html += '<div class="phase-accent mt-1"></div>';
       html += '<div class="flex-1 min-w-0">';
 
-      html += '<div class="flex items-baseline justify-between mb-3 group">';
-      html += '<h3 class="text-base font-semibold text-stone-900 cursor-pointer hover:text-cloze-indigo transition-colors" onclick="editPhase(' + phase.id + ')">' + escapeHtml(phase.name) + timing + '</h3>';
-      html += '<button onclick="deletePhase(' + phase.id + ')" class="opacity-0 group-hover:opacity-100 text-stone-300 hover:text-red-400 transition-all text-xs">remove</button>';
-      html += '</div>';
+      html += '<div class="flex items-baseline justify-between gap-3 group">';
+      html += '<h3 class="text-base font-semibold text-stone-900 cursor-pointer hover:text-cloze-indigo transition-colors" onclick="editPhase(' + phase.id + ')" title="Rename this ' + noun + '">' + escapeHtml(phase.name) + timing + '</h3>';
+      html += '<div class="flex shrink-0 items-center gap-1">';
+      html += '<button onclick="movePhase(' + phase.id + ', -1)" data-move="' + phase.id + '-up" class="px-1.5 text-stone-300 hover:text-stone-700 disabled:invisible" aria-label="Move ' + escapeHtml(phase.name) + ' up"' + (pi === 0 ? ' disabled' : '') + '>↑</button>';
+      html += '<button onclick="movePhase(' + phase.id + ', 1)" data-move="' + phase.id + '-down" class="px-1.5 text-stone-300 hover:text-stone-700 disabled:invisible" aria-label="Move ' + escapeHtml(phase.name) + ' down"' + (pi === f.phases.length - 1 ? ' disabled' : '') + '>↓</button>';
+      html += '<button onclick="deletePhase(' + phase.id + ')" class="ml-1 opacity-0 group-hover:opacity-100 focus:opacity-100 text-stone-300 hover:text-red-400 transition-all text-xs">remove</button>';
+      html += '</div></div>';
+      if (phase.description) {
+        html += '<p class="mb-3 cursor-pointer text-sm text-stone-500 hover:text-cloze-indigo" onclick="editPhaseLine(' + phase.id + ')" title="Edit the line on its card">' + escapeHtml(phase.description) + '</p>';
+      } else {
+        html += '<div class="mb-3"><button onclick="editPhaseLine(' + phase.id + ')" class="add-trigger text-xs">+ Line on its card</button></div>';
+      }
 
       if (phase.chats.length) {
         html += phase.chats.map(function(chat) {
@@ -594,40 +609,104 @@
     currentFlow.cycle_count = cycles;
   }
 
+  function phaseNoun() {
+    return currentFlow && currentFlow.flow_type === 'always' ? 'group' : 'phase';
+  }
+
+  async function reloadCurrentFlow() {
+    var resp = await fetch('/api/provider/flows/' + currentFlow.id);
+    if (resp.ok) currentFlow = await resp.json();
+    renderWorkspace();
+  }
+
   async function addPhase() {
-    var name = await showDialog({ title: 'New phase', input: '', placeholder: 'Phase name', confirmText: 'Add' });
+    var noun = phaseNoun();
+    var name = await showDialog({ title: 'New ' + noun, input: '', placeholder: noun === 'group' ? 'Group name' : 'Phase name', confirmText: 'Add' });
     if (!name) return;
 
-    var lastPhase = currentFlow.phases[currentFlow.phases.length - 1];
-    var startDay = lastPhase ? (lastPhase.end_day || lastPhase.start_day + 7) : 0;
-
+    var body = { name: name };
+    if (currentFlow.flow_type === 'phased') {
+      var lastPhase = currentFlow.phases[currentFlow.phases.length - 1];
+      var startDay = lastPhase ? (lastPhase.end_day || lastPhase.start_day + 7) : 0;
+      body.start_day = startDay;
+      body.end_day = startDay + 7;
+    }
     var resp = await fetch('/api/provider/flows/' + currentFlow.id + '/phases', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name, start_day: startDay, end_day: startDay + 7 })
+      body: JSON.stringify(body)
     });
-    var phase = await resp.json();
-    currentFlow.phases.push(phase);
-    renderWorkspace();
+    var result = await resp.json();
+    if (!resp.ok) { showDialog({ title: 'Could not add it', message: result.error || 'Please try again.', confirmText: 'OK' }); return; }
+    // Adding a second group can rename the first (see create_phase), so reload.
+    await reloadCurrentFlow();
+  }
+
+  async function savePhaseField(phaseId, field, value) {
+    var resp = await fetch('/api/provider/phases/' + phaseId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [field]: value })
+    });
+    var result = await resp.json();
+    if (!resp.ok) { showDialog({ title: 'Not saved', message: result.error || 'Please try again.', confirmText: 'OK' }); return null; }
+    return result;
   }
 
   async function editPhase(phaseId) {
     var phase = currentFlow.phases.find(function(p) { return p.id === phaseId; });
     if (!phase) return;
 
-    var name = await showDialog({ title: 'Rename phase', input: phase.name, confirmText: 'Save' });
+    var name = await showDialog({ title: 'Rename ' + phaseNoun(), input: phase.name, confirmText: 'Save' });
     if (!name || name === phase.name) return;
-    await fetch('/api/provider/phases/' + phaseId, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name })
-    });
-    phase.name = name;
+    var saved = await savePhaseField(phaseId, 'name', name);
+    if (!saved) return;
+    phase.name = saved.name;
+    renderWorkspace();
+  }
+
+  async function editPhaseLine(phaseId) {
+    var phase = currentFlow.phases.find(function(p) { return p.id === phaseId; });
+    if (!phase) return;
+
+    var line = await showDialog({ title: 'Line on its card', message: 'Shown under the ' + phaseNoun() + '\'s name on the participant\'s Home. Leave it empty for none.', input: phase.description || '', placeholder: 'For example: Short practice chats with Sky and Star', confirmText: 'Save' });
+    if (line === null) return;
+    if ((line || '') === (phase.description || '')) return;
+    var saved = await savePhaseField(phaseId, 'description', line);
+    if (!saved) return;
+    phase.description = saved.description;
     renderPhases();
   }
 
+  async function movePhase(phaseId, delta) {
+    var ids = currentFlow.phases.map(function(p) { return p.id; });
+    var i = ids.indexOf(phaseId);
+    var j = i + delta;
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    ids[i] = ids[j];
+    ids[j] = phaseId;
+    var resp = await fetch('/api/provider/flows/' + currentFlow.id + '/phase-order', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phase_ids: ids })
+    });
+    if (!resp.ok) {
+      var result = await resp.json().catch(function() { return {}; });
+      showDialog({ title: 'Not moved', message: result.error || 'Please try again.', confirmText: 'OK' });
+      return;
+    }
+    await reloadCurrentFlow();
+    // Keep keyboard focus on the same arrow, or the other one at either end.
+    var dir = delta < 0 ? 'up' : 'down';
+    var other = delta < 0 ? 'down' : 'up';
+    var button = document.querySelector('[data-move="' + phaseId + '-' + dir + '"]');
+    if (!button || button.disabled) button = document.querySelector('[data-move="' + phaseId + '-' + other + '"]');
+    if (button) button.focus();
+  }
+
   async function deletePhase(phaseId) {
-    var ok = await showDialog({ title: 'Delete phase', message: 'This will remove the phase and all its chats.', confirmText: 'Delete', danger: true });
+    var noun = phaseNoun();
+    var ok = await showDialog({ title: 'Delete ' + noun, message: 'This will remove the ' + noun + ' and all its chats from the study design. Participants keep the chats they already have.', confirmText: 'Delete', danger: true });
     if (!ok) return;
     await fetch('/api/provider/phases/' + phaseId, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } });
     currentFlow.phases = currentFlow.phases.filter(function(p) { return p.id !== phaseId; });

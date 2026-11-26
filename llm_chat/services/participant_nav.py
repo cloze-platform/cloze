@@ -31,6 +31,7 @@ from sqlalchemy import case, func
 
 from ..extensions import db
 from ..models import ChatTemplate, ChatWindow, Conversation, Message, Report, SafetyPlan, SavedSelection
+from ..models.study_flow import FlowEnrollment, FlowPhase, StudyFlow
 from ..utils.settings_resolution import Settings, get_provider_id_for_patient
 from ..utils.access_hours import DEFAULT_TZ
 from .conversation_end import stamp_window_closed
@@ -90,10 +91,19 @@ class Exercise:
 
 @dataclass
 class Group:
-    """A chat window: the exercises the participant has for one phase or cycle."""
+    """A chat window: the exercises the participant has for one phase or cycle.
+
+    A window made from a study flow's phase reads the phase as it is now, so
+    the research team's renames, card lines and reordering reach participants
+    already enrolled. `phase` is that phase when the group is named by it: in
+    a phased flow, or an always-available flow with more than one group. A
+    flow with a single group goes by the flow's name, as it always has.
+    """
     window: ChatWindow
     status: str
     exercises: list = field(default_factory=list)
+    phase: object = field(default=None, repr=False)
+    order: tuple = ()
 
     @property
     def id(self):
@@ -101,7 +111,14 @@ class Group:
 
     @property
     def name(self):
+        if self.phase is not None:
+            return self.phase.name
         return self.window.phase_label or self.window.flow_name or self.window.title
+
+    @property
+    def blurb(self):
+        """The line under the group's name on its card, or None."""
+        return self.phase.description if self.phase is not None else None
 
     @property
     def is_open(self):
@@ -182,8 +199,11 @@ class Nav:
 
     @property
     def menu_groups(self):
-        """Groups for the menu and Home: in the order they open."""
-        return sorted(self.groups, key=lambda g: (g.opens_at, g.id))
+        """Groups for the menu and Home, in the research team's order: each
+        study flow's groups in the order the team set, flows in the order the
+        participant joined them, then chat windows made by hand by when they
+        open."""
+        return sorted(self.groups, key=lambda g: g.order)
 
     @property
     def exercises(self):
@@ -308,7 +328,9 @@ def build(user, now=None):
         if c.window_id and c.template_id:
             by_exercise.setdefault((c.window_id, c.template_id), c)
 
-    groups = {w.id: Group(window=w, status=w.compute_status(now)) for w in windows}
+    layout = _flow_layout(user.id, windows)
+    groups = {w.id: Group(window=w, status=w.compute_status(now), **_group_placement(w, layout))
+              for w in windows}
     for t in templates:
         group = groups[t.window_id]
         conv = by_exercise.get((t.window_id, t.id))
@@ -319,6 +341,51 @@ def build(user, now=None):
     return Nav(user=user, now=now, provider_id=provider_id, groups=list(groups.values()),
                chats=_visible_chats(conversations, windows_by_id, counts, now), max_turns=max_turns,
                settings=settings)
+
+
+@dataclass
+class _FlowLayout:
+    flows: dict        # flow id: StudyFlow
+    phases: dict       # phase id: FlowPhase
+    phase_counts: dict  # flow id: how many phases it has
+    joined: dict       # flow id: when the participant enrolled
+
+
+def _flow_layout(user_id, windows):
+    """The study flows and phases behind these windows, in three queries."""
+    flow_ids = {w.flow_id for w in windows if w.flow_id}
+    if not flow_ids:
+        return _FlowLayout({}, {}, {}, {})
+    flows = {f.id: f for f in StudyFlow.query.filter(StudyFlow.id.in_(flow_ids))}
+    phases = {p.id: p for p in FlowPhase.query.filter(FlowPhase.flow_id.in_(flow_ids))}
+    counts = {}
+    for p in phases.values():
+        counts[p.flow_id] = counts.get(p.flow_id, 0) + 1
+    joined = {e.flow_id: e.enrolled_at for e in
+              FlowEnrollment.query.filter(FlowEnrollment.patient_id == user_id,
+                                          FlowEnrollment.flow_id.in_(flow_ids))}
+    return _FlowLayout(flows, phases, counts, joined)
+
+
+def _group_placement(window, layout):
+    """The phase a window's group is named by (or None), and its place in the
+    menu. Flow groups come first: flows by when the participant joined, then
+    each flow's groups in the team's order, then by date (a recurring flow's
+    cycles). Hand-made windows follow, by when they open."""
+    start = window.start_date or 0
+    flow = layout.flows.get(window.flow_id)
+    if flow is None:
+        return {"phase": None, "order": (1, start, 0, 0, start, window.id)}
+    phase = layout.phases.get(window.phase_id)
+    if phase is not None and phase.flow_id != flow.id:
+        phase = None
+    named_by_phase = phase is not None and (
+        flow.flow_type == "phased"
+        or (flow.flow_type == "always" and layout.phase_counts.get(flow.id, 0) > 1))
+    joined = layout.joined.get(flow.id) or start
+    rank = (phase.order_index or 0) if phase is not None and flow.flow_type != "recurring" else 0
+    return {"phase": phase if named_by_phase else None,
+            "order": (0, joined, flow.id, rank, start, window.id)}
 
 
 def _message_counts(conversation_ids):

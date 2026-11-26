@@ -671,7 +671,7 @@ def get_flows():
         )
         db.session.add(default_flow)
         db.session.flush()
-        phase = FlowPhase(flow_id=default_flow.id, name='Always Available',
+        phase = FlowPhase(flow_id=default_flow.id, name=FlowPhase.DEFAULT_ALWAYS_NAME,
                           start_day=0, end_day=None, order_index=0)
         db.session.add(phase)
         db.session.commit()
@@ -705,7 +705,7 @@ def create_flow():
 
     # For 'always' and 'recurring', auto-create a default phase
     if flow_type == 'always':
-        phase = FlowPhase(flow_id=flow.id, name='Always Available', start_day=0, end_day=None, order_index=0)
+        phase = FlowPhase(flow_id=flow.id, name=FlowPhase.DEFAULT_ALWAYS_NAME, start_day=0, end_day=None, order_index=0)
         db.session.add(phase)
     elif flow_type == 'recurring':
         phase = FlowPhase(flow_id=flow.id, name='Each Cycle', start_day=0,
@@ -777,25 +777,64 @@ def delete_flow(flow_id):
 
 # ── Flow Phases ───────────────────────────────────────────────
 
+def _phase_text(data, key, limit, required=False):
+    """A phase's name or description from the request, stripped. None when
+    absent or blank (and not required). ValueError when it's not text, too
+    long, or required and blank."""
+    value = data.get(key)
+    if value is None:
+        value = ''
+    if not isinstance(value, str):
+        raise ValueError(f'{key} must be text.')
+    value = value.strip()
+    if len(value) > limit:
+        raise ValueError(f'{key} can be at most {limit} characters.')
+    if not value:
+        if required:
+            raise ValueError('Give the group a name.')
+        return None
+    return value
+
+
 @provider_bp.route("/api/provider/flows/<int:flow_id>/phases", methods=['POST'])
 @role_required('provider')
 def create_phase(flow_id):
-    """Add a phase to a flow."""
+    """Add a phase to a flow: a dated phase in a phased flow, or another group
+    in an always-available one. Recurring flows repeat their one phase, so
+    they can't have more."""
     flow = db.get_or_404(StudyFlow, flow_id)
     if flow.provider_id != current_user.id:
         abort(403)
+    if flow.flow_type == 'recurring':
+        return jsonify({'error': 'A recurring flow repeats one group; it can\'t have more.'}), 400
 
     data = request.json or {}
-    max_order = max([p.order_index for p in flow.phases], default=-1)
+    try:
+        name = _phase_text({'name': data.get('name', 'New group')}, 'name', FlowPhase.NAME_LIMIT, required=True)
+        description = _phase_text(data, 'description', FlowPhase.DESCRIPTION_LIMIT)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
 
+    # An always-available flow with one group shows it under the flow's name.
+    # Adding a second makes each group show its own name, so give the first
+    # one, still called by its automatic default, the name participants
+    # already know it by.
+    if (flow.flow_type == 'always' and len(flow.phases) == 1
+            and flow.phases[0].name == FlowPhase.DEFAULT_ALWAYS_NAME):
+        flow.phases[0].name = flow.name
+
+    max_order = max([p.order_index or 0 for p in flow.phases], default=-1)
     phase = FlowPhase(
         flow_id=flow_id,
-        name=data.get('name', 'New Phase').strip(),
-        start_day=data.get('start_day', 0),
-        end_day=data.get('end_day'),
+        name=name,
+        description=description,
+        start_day=data.get('start_day', 0) if flow.flow_type == 'phased' else 0,
+        end_day=data.get('end_day') if flow.flow_type == 'phased' else None,
         order_index=max_order + 1,
     )
     db.session.add(phase)
+    db.session.flush()
+    _log_provider_action('phase_created', 'flow_phase', phase.id, {'flow_id': flow.id, 'name': name})
     db.session.commit()
     return jsonify(phase.to_dict()), 201
 
@@ -803,23 +842,51 @@ def create_phase(flow_id):
 @provider_bp.route("/api/provider/phases/<int:phase_id>", methods=['PUT'])
 @role_required('provider')
 def update_phase(phase_id):
-    """Update a phase."""
+    """Update a phase: its name, the line on its card, and its days."""
     phase = db.get_or_404(FlowPhase, phase_id)
     if phase.flow.provider_id != current_user.id:
         abort(403)
 
     data = request.json or {}
-    if 'name' in data:
-        phase.name = data['name'].strip()
+    try:
+        if 'name' in data:
+            phase.name = _phase_text(data, 'name', FlowPhase.NAME_LIMIT, required=True)
+        if 'description' in data:
+            phase.description = _phase_text(data, 'description', FlowPhase.DESCRIPTION_LIMIT)
+    except ValueError as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 400
     if 'start_day' in data:
         phase.start_day = data['start_day']
     if 'end_day' in data:
         phase.end_day = data['end_day']
-    if 'order_index' in data:
-        phase.order_index = data['order_index']
 
     db.session.commit()
     return jsonify(phase.to_dict())
+
+
+@provider_bp.route("/api/provider/flows/<int:flow_id>/phase-order", methods=['PUT'])
+@role_required('provider')
+def reorder_phases(flow_id):
+    """Put a flow's groups in a new order: {"phase_ids": [...]}, every phase
+    of the flow exactly once. Participants' menus follow at once."""
+    flow = db.get_or_404(StudyFlow, flow_id)
+    if flow.provider_id != current_user.id:
+        abort(403)
+
+    ids = (request.json or {}).get('phase_ids')
+    current = sorted(p.id for p in flow.phases)
+    if (not isinstance(ids, list) or any(not isinstance(i, int) or isinstance(i, bool) for i in ids)
+            or sorted(ids) != current):
+        return jsonify({'error': 'phase_ids must list each of this flow\'s groups once.'}), 400
+
+    by_id = {p.id: p for p in flow.phases}
+    for index, phase_id in enumerate(ids):
+        by_id[phase_id].order_index = index
+    _log_provider_action('phases_reordered', 'study_flow', flow.id, {'phase_ids': ids})
+    db.session.commit()
+    db.session.refresh(flow)
+    return jsonify(flow.to_dict())
 
 
 @provider_bp.route("/api/provider/phases/<int:phase_id>", methods=['DELETE'])
