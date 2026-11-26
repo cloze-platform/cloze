@@ -34,7 +34,7 @@ def user_dashboard():
     # A link into today's page (/dashboard?conversation=<id>) opens the exercise.
     if uses_v2():
         conversation_id = request.args.get('conversation', '')
-        if conversation_id.isdigit():
+        if re.fullmatch(r'[0-9]{1,12}', conversation_id):
             return redirect(url_for('participant.exercise', conversation_id=int(conversation_id)))
         return render_participant_home()
     return render_template("user_dashboard.html")
@@ -565,12 +565,25 @@ def save_selection():
     if not current_user.can_access_patient(conversation.user_id):
         abort(403)
 
+    text, note = data.get('text'), data.get('note')
+    if not isinstance(text, str) or not text.strip() or len(text) > SavedSelection.TEXT_LIMIT:
+        return jsonify({'error': f'Saved text must be 1 to {SavedSelection.TEXT_LIMIT:,} characters.'}), 400
+    if note is not None and (not isinstance(note, str) or len(note) > SavedSelection.NOTE_LIMIT):
+        return jsonify({'error': f'Notes can be up to {SavedSelection.NOTE_LIMIT:,} characters.'}), 400
+    # Today's pages send the ids as strings (from data attributes); keep them as numbers.
+    message_ids = data.get('message_ids') or []
+    if (not isinstance(message_ids, list) or len(message_ids) > 200
+            or not all(isinstance(i, int) and not isinstance(i, bool)
+                       or isinstance(i, str) and re.fullmatch(r'[0-9]{1,12}', i) for i in message_ids)):
+        return jsonify({'error': 'message_ids must be a list of message ids'}), 400
+    message_ids = [int(i) for i in message_ids]
+
     selection = SavedSelection(
         user_id=current_user.id,
         conversation_id=conversation_id,
-        selection_text=data['text'],
-        message_ids=json.dumps(data.get('message_ids', [])),
-        note=data.get('note')
+        selection_text=text,
+        message_ids=json.dumps(message_ids),
+        note=note or None
     )
     db.session.add(selection)
     db.session.commit()
