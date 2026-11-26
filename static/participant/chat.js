@@ -8,14 +8,10 @@
   var input = document.getElementById("reply");
   var send = document.getElementById("send");
   var list = document.getElementById("conversation");
-  var announcer = document.getElementById("announcer");
   var conversationId = form.dataset.conversationId;
   var busy = false;
 
-  function announce(text) {
-    announcer.textContent = "";
-    setTimeout(function () { announcer.textContent = text; }, 50);
-  }
+  var announce = Cloze.announce;
 
   function newId() {
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -151,22 +147,19 @@
     showWaiting();
     scrollDown();
 
-    var response, data;
+    var data, failed = null;
     try {
-      response = await fetch("/api/conversation/" + conversationId + "/message", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, client_message_id: clientId }),
-      });
-      data = await response.json().catch(function () { return {}; });
+      data = await Cloze.api("POST", "/api/conversation/" + conversationId + "/message",
+                             { message: text, client_message_id: clientId });
     } catch (e) {
-      response = null;
+      failed = e;
+      data = e.data;
     }
     hideWaiting();
     busy = false;
     send.disabled = false;
 
-    if (response && response.ok) {
+    if (!failed) {
       status.textContent = "";
       status.appendChild(el("time", "", now()));
       wrap.dataset.messageId = data.user_message_id;
@@ -179,7 +172,7 @@
       if (data.ended) setTimeout(function () { window.location.reload(); }, 1200);
       return;
     }
-    if (!response) {
+    if (failed.status === 0) {
       markFailed(wrap, text, "Couldn't reach Cloze. Check your connection.", { retry: true, edit: true });
     } else if (data.saved) {
       // Saved on the server; only the reply is missing.
@@ -187,9 +180,9 @@
       markFailed(wrap, text, "Saved. The reply didn't come through.", { retry: true });
     } else if (data.in_progress) {
       markFailed(wrap, text, "Still sending. Wait a moment, then try again.", { retry: true });
-    } else if (response.status === 403 && (data.ended || data.turn_limit_reached)) {
+    } else if (failed.status === 403 && (data.ended || data.turn_limit_reached)) {
       markFailed(wrap, text, "Not sent. " + (data.error || "This conversation has ended."), { reload: true });
-    } else if (response.status >= 500) {
+    } else if (failed.status >= 500) {
       markFailed(wrap, text, "The reply didn't come through.", { retry: true, edit: true });
     } else {
       markFailed(wrap, text, "Not sent. " + (data.error || "Something went wrong."), { edit: true });

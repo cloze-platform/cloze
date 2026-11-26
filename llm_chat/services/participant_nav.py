@@ -36,10 +36,8 @@ from ..utils.access_hours import DEFAULT_TZ
 from .conversation_end import stamp_window_closed
 
 NOT_STARTED, STARTED, FINISHED = "not_started", "started", "finished"
-TURN_LIMIT, WINDOW_CLOSED = "turn_limit", "window_closed"
 
-OPEN, UPCOMING = "active", "scheduled"           # ChatWindow.compute_status values
-CLOSED = ("generating_report", "report_ready")
+
 
 
 @dataclass
@@ -78,9 +76,9 @@ class Exercise:
         if self.conversation.ended_at is not None:
             return self.conversation.end_reason
         if self.max_turns and self.turns_used >= self.max_turns:
-            return TURN_LIMIT
+            return Conversation.TURN_LIMIT
         if self.group.is_closed:
-            return WINDOW_CLOSED
+            return Conversation.WINDOW_CLOSED
         return None
 
     @property
@@ -107,15 +105,15 @@ class Group:
 
     @property
     def is_open(self):
-        return self.status == OPEN
+        return self.status == ChatWindow.OPEN
 
     @property
     def is_upcoming(self):
-        return self.status == UPCOMING
+        return self.status == ChatWindow.UPCOMING
 
     @property
     def is_closed(self):
-        return self.status in CLOSED
+        return self.status in ChatWindow.CLOSED_STATUSES
 
     @property
     def opens_at(self):
@@ -160,10 +158,6 @@ class SafetyPlanState:
         """Exercises can't be started until a required plan is approved (the
         server enforces this in start_conversation_from_template)."""
         return self.required and self.state not in ("approved", "change_waiting")
-
-    @property
-    def needs_participant(self):
-        return self.state == "your_turn"
 
 
 @dataclass

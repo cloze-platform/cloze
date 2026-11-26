@@ -54,10 +54,10 @@
       try {
         var id = form.dataset.conversationId;
         if (!id) {
-          var started = await postJSON("/api/windows/start_conversation", { template_id: Number(form.dataset.templateId) });
+          var started = await Cloze.api("POST", "/api/windows/start_conversation", { template_id: Number(form.dataset.templateId) });
           id = started.conversation_id;
         }
-        await postJSON("/api/conversation/" + id + "/consent", {});
+        await Cloze.api("POST", "/api/conversation/" + id + "/consent", {});
         window.location.assign("/exercise/" + id);
       } catch (e) {
         error.textContent = e.message || "Something went wrong. Please try again.";
@@ -65,17 +65,6 @@
         button.disabled = false;
       }
     });
-  }
-
-  async function postJSON(url, body) {
-    var response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    var data = await response.json().catch(function () { return {}; });
-    if (!response.ok) throw new Error(data.error || "Something went wrong. Please try again.");
-    return data;
   }
 
   // ── The window closing while the page is open: reload, and the server

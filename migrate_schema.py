@@ -202,7 +202,7 @@ def run_migration(apply=False):
         cursor.execute(
             "SELECT COUNT(*) FROM conversations c JOIN chat_windows w ON c.window_id = w.id "
             f"WHERE {ended_filter}(w.end_date < {time.time()} "
-            "OR w.status IN ('generating_report', 'report_ready'))"
+            "OR w.status IN ('generating_report', 'report_ready'))"  # ChatWindow.CLOSED_STATUSES
         )
         print(f"\n  {cursor.fetchone()[0]} conversation(s) in ended windows to mark as finished (window_closed)")
 

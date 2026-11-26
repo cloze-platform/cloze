@@ -10,6 +10,14 @@
 
   var wide = window.matchMedia("(min-width: 1024px)");
   var KEY = "cloze.panel";
+  // Remembering the panel is a nicety: storage can be unavailable (private
+  // browsing, blocked) without breaking the page.
+  function remember(value) {
+    try { localStorage.setItem(KEY, value); } catch (e) { /* not remembered */ }
+  }
+  function remembered() {
+    try { return localStorage.getItem(KEY); } catch (e) { return null; }
+  }
   toggle.setAttribute("role", "button");
   toggle.setAttribute("aria-expanded", "false");
 
@@ -24,7 +32,7 @@
       document.body.style.overflow = "hidden";
     }
     if (focus) panel.focus();
-    if (wide.matches) localStorage.setItem(KEY, "open");
+    if (wide.matches) remember("open");
   }
 
   function close(returnFocus) {
@@ -34,7 +42,7 @@
     backdrop.classList.add("hidden");
     document.body.style.overflow = "";
     if (returnFocus) toggle.focus();
-    if (wide.matches) localStorage.setItem(KEY, "closed");
+    if (wide.matches) remember("closed");
   }
 
   toggle.addEventListener("click", function (event) {
@@ -52,11 +60,14 @@
     document.body.style.overflow = "";
   });
 
-  if (wide.matches && localStorage.getItem(KEY) === "open") open(false);
+  if (wide.matches && remembered() === "open") open(false);
 
   // ── Adding a line saved from the chat (select-save.js) ──
-  function counts(n) {
-    document.querySelectorAll("[data-notebook-count]").forEach(function (el) { el.textContent = n; });
+  // One more saved line, in every count on the page (the menu's too).
+  function countOneMore() {
+    document.querySelectorAll("[data-notebook-count]").forEach(function (el) {
+      el.textContent = (parseInt(el.textContent, 10) || 0) + 1;
+    });
   }
 
   window.ParticipantPanel = {
@@ -76,7 +87,7 @@
       item.appendChild(meta);
       list.insertBefore(item, list.firstChild);
       document.getElementById("notebook-empty").classList.add("hidden");
-      counts(list.children.length);
+      countOneMore();
     },
   };
 })();

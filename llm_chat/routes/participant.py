@@ -24,6 +24,7 @@ from ..models import Message, SafetyPlan, SavedSelection
 from ..services import participant_nav
 from ..services.greeting import greeting_for
 from ..services.safety_info import DEFAULT_AGREEMENT, bold, safety_info
+from ..utils.access_hours import DEFAULT_TZ
 from ..utils.participant_ui import uses_v2
 
 participant_bp = Blueprint("participant", __name__, url_prefix="")
@@ -255,7 +256,7 @@ def _local(timestamp, tz_name):
     try:
         tz = ZoneInfo(tz_name)
     except Exception:
-        tz = ZoneInfo("America/New_York")
+        tz = ZoneInfo(DEFAULT_TZ)
     return datetime.fromtimestamp(timestamp, tz)
 
 

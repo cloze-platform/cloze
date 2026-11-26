@@ -49,7 +49,7 @@
         <a href="{{ url_for('participant.notebook') }}" id="panel-toggle" aria-controls="panel"
            class="inline-flex min-h-10 items-center gap-2 rounded-[10px] border border-p-line-strong bg-p-surface px-3 text-sm font-medium text-p-ink no-underline hover:bg-p-raised aria-expanded:bg-p-accent-soft aria-expanded:border-p-accent-line">
           {{ icon("notebook", 16) }}<span class="hidden sm:inline">Notebook</span>
-          <span class="sr-only sm:not-sr-only text-p-hint" data-notebook-count>{{ notebook|length }}</span>
+          <span class="sr-only sm:not-sr-only text-p-hint" data-notebook-count>{{ nav.notebook_count }}</span>
         </a>
       {% endif %}
       <a href="{{ url_for('participant.help_page') }}" data-help-open
@@ -131,8 +131,7 @@
 
     {% elif state != "agree" %}
       <section aria-labelledby="dock-heading" class="flex flex-wrap items-start gap-4 rounded-[20px] border border-p-line bg-p-quiet px-5 py-5">
-        <span aria-hidden="true" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full
-          {{ 'bg-p-done-soft text-p-done' if state == 'finished' and exercise.end_reason == 'completed' else 'bg-p-raised text-p-ink-3' }}">
+        <span aria-hidden="true" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-p-raised text-p-ink-3">
           {%- if state == "finished" and exercise.end_reason == "turn_limit" %}{{ icon("chat", 20) }}
           {%- elif state in ("finished", "closed") %}{{ icon("calendar", 20) }}
           {%- elif state == "upcoming" %}{{ icon("clock", 20) }}

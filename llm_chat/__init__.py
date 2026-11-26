@@ -127,13 +127,15 @@ def create_app():
 
     # Instance colours as CSS variables (templates/_theme_vars.html), plus the
     # participant pages' tokens built from them (templates/participant/_tokens.html).
-    from .theme import css_variables, participant_css
+    from .theme import css_variables, participant_css, participant_tokens
     theme_css = css_variables(app.config["CLOZE_THEME"])
     participant_theme_css = participant_css(app.config["CLOZE_THEME"])
+    participant_token_names = list(participant_tokens(app.config["CLOZE_THEME"])[0])
 
     @app.context_processor
     def inject_theme():
-        return {"theme_css": theme_css, "participant_css": participant_theme_css}
+        return {"theme_css": theme_css, "participant_css": participant_theme_css,
+                "participant_token_names": participant_token_names}
 
     from .utils.icons import icon, status_icon
     app.jinja_env.globals.update(icon=icon, status_icon=status_icon)

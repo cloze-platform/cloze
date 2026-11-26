@@ -23,11 +23,7 @@
 </style>
 <script>
   (function () {
-    var names = ["page", "menu", "surface", "quiet", "raised", "chat", "line", "line-strong",
-      "ink", "ink-2", "ink-3", "hint", "ring", "accent", "accent-hover", "on-accent", "accent-soft",
-      "accent-line", "accent-ink", "focus", "night", "night-raised", "night-line", "night-ink",
-      "night-muted", "night-link", "night-help", "night-help-soft", "done", "done-fill", "done-soft", "waiting",
-      "waiting-soft", "waiting-line", "help", "help-soft", "help-line"];
+    var names = {{ participant_token_names|tojson }};   // from llm_chat/theme.py
     var p = {};
     names.forEach(function (n) { p[n] = "var(--p-" + n + ")"; });
     var extend = tailwind.config.theme.extend;
