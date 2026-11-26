@@ -42,9 +42,32 @@ def test_account_locks_after_five_failures(client, make_user):
     make_user("victim", role="user", password="pw-12345")
     for _ in range(5):
         assert _login(client, "victim", "bad").status_code == 401
-    # 6th attempt: account is now locked even though it's under the IP rate cap
-    locked = _login(client, "victim", "bad")
-    assert locked.status_code == 423
+    # Now locked: even the right password is refused, in the same words as
+    # for an unknown user, so neither the account nor the password shows.
+    locked = _login(client, "victim", "pw-12345")
+    unknown = _login(client, "ghost", "pw-12345")
+    assert locked.status_code == unknown.status_code == 401
+    assert locked.get_json() == unknown.get_json()
+
+
+def test_wrong_tries_while_locked_do_not_extend_the_lock(client, make_user, db):
+    user = make_user("victim", role="user", password="pw-12345")
+    for _ in range(5):
+        _login(client, "victim", "bad")
+    until = db.session.get(type(user), user.id).locked_until
+    _login(client, "victim", "bad")
+    assert db.session.get(type(user), user.id).locked_until == until
+
+
+def test_an_expired_lock_starts_the_count_again(client, make_user, db, monkeypatch):
+    import time
+    make_user("victim", role="user", password="pw-12345")
+    for _ in range(5):
+        _login(client, "victim", "bad")
+    later = time.time() + 901
+    monkeypatch.setattr(time, "time", lambda: later)
+    assert _login(client, "victim", "bad").status_code == 401        # one wrong try after the lock ran out
+    assert _login(client, "victim", "pw-12345").status_code == 200   # ...doesn't lock it again
 
 
 def test_ip_rate_limit_after_ten_attempts(client, make_user):
