@@ -7,7 +7,8 @@ call them.
 
 Every page goes through participant_page: signed-in participants only, and
 only while the switch is v2. Anyone else gets 404, so on a v1 instance the
-pages don't exist.
+pages don't exist. It builds the participant's menu data once per request
+(participant_nav.build) and passes it to the page as nav.
 """
 
 import json
@@ -24,7 +25,6 @@ from ..services import participant_nav
 from ..services.greeting import greeting_for
 from ..services.safety_info import DEFAULT_AGREEMENT, bold, safety_info
 from ..utils.participant_ui import uses_v2
-from ..utils.settings_resolution import get_effective_setting, get_provider_id_for_patient
 
 participant_bp = Blueprint("participant", __name__, url_prefix="")
 
@@ -40,61 +40,62 @@ def participant_page(view):
     def wrapped(*args, **kwargs):
         if not current_user.is_patient() or not uses_v2():
             abort(404)
-        if request.endpoint not in OPEN_WHILE_CLOSED and _locked_out():
+        try:
+            nav = participant_nav.build(current_user)
+        except Exception:
+            # Get help now must still show its crisis lines (see help_page).
+            if request.endpoint != "participant.help_page":
+                raise
+            current_app.logger.exception("Get help now: the menu's data didn't load")
+            db.session.rollback()
+            nav = None
+        if (nav is not None and request.endpoint not in OPEN_WHILE_CLOSED
+                and participant_nav.locked_out(nav.opening_hours)):
             return redirect(url_for("participant.closed"))
-        return view(*args, **kwargs)
+        return view(*args, nav=nav, **kwargs)
     return wrapped
 
 
-def _locked_out():
-    hours = participant_nav.opening_hours(get_provider_id_for_patient(current_user.id))
-    return participant_nav.locked_out(hours)
-
-
-def render_page(template, current=None, nav=None, **context):
+def render_page(template, nav, current=None, **context):
     """Render a participant page with the menu's data. current names the menu
     item to mark: home, notebook, safety_plan, reports, exercises or help."""
-    nav = nav or participant_nav.build(current_user)
     return render_template(template, nav=nav, current=current, **context)
 
 
 def render_home():
-    if _locked_out():
+    """Home, for /dashboard (conversations.user_dashboard), which has already
+    checked the user and the switch."""
+    nav = participant_nav.build(current_user)
+    if participant_nav.locked_out(nav.opening_hours):
         return redirect(url_for("participant.closed"))
-    return render_page("participant/home.html", current="home")
+    return render_page("participant/home.html", nav, current="home")
 
 
 # ── Pages ──────────────────────────────────────────────────────
 
 @participant_bp.route("/help")
 @participant_page
-def help_page():
+def help_page(nav):
     """Get help now as a page: for phones without JavaScript, and as the
     link's target everywhere (the menu opens it as a dialog when it can).
-    If the menu's data can't be loaded, the page still shows the crisis lines."""
-    try:
-        nav = participant_nav.build(current_user)
-    except Exception:
-        current_app.logger.exception("Get help now: the menu's data didn't load")
-        db.session.rollback()
-        return render_template("participant/help.html", nav=None, current="help")
-    return render_page("participant/help.html", current="help", nav=nav)
+    If the menu's data can't be loaded (nav is None), the page still shows the
+    crisis lines, without the menu."""
+    return render_page("participant/help.html", nav, current="help")
 
 
 @participant_bp.route("/exercises")
 @participant_page
-def exercises():
+def exercises(nav):
     """Every group and exercise. The phone's Exercises tab; on a computer the
     menu shows the same list."""
-    return render_page("participant/exercises.html", current="exercises")
+    return render_page("participant/exercises.html", nav, current="exercises")
 
 
 @participant_bp.route("/exercise/<int:conversation_id>")
 @participant_page
-def exercise(conversation_id):
+def exercise(conversation_id, nav):
     """An exercise the participant has started (or opened): only their own
     exercise's conversation, in a visible window. Anything else is 404."""
-    nav = participant_nav.build(current_user)
     ex = nav.exercise_for_conversation(conversation_id)
     if ex is None:
         abort(404)
@@ -104,10 +105,9 @@ def exercise(conversation_id):
 
 @participant_bp.route("/exercise/template/<int:template_id>")
 @participant_page
-def exercise_template(template_id):
+def exercise_template(template_id, nav):
     """An exercise not started yet. Agreeing to the safety information starts
     its conversation (static/participant/exercise.js)."""
-    nav = participant_nav.build(current_user)
     ex = nav.exercise_for_template(template_id)
     if ex is None:
         abort(404)
@@ -143,7 +143,7 @@ def _render_exercise(nav, ex, messages):
     later = ex.group.exercises[ex.group.exercises.index(ex) + 1:]
     next_ex = next((e for e in later if e.state != participant_nav.FINISHED and not nav.locked(e)), None)
     return render_page(
-        "participant/exercise.html", current="exercise", nav=nav, current_exercise=ex.id,
+        "participant/exercise.html", nav, current="exercise", current_exercise=ex.id,
         phone_bar=False, exercise=ex, group=ex.group, messages=messages, state=state, next_exercise=next_ex,
         greeting=greeting_for(ex.id, current_user) if not messages else None,
         safety=safety_info(nav.provider_id) if state == "agree" else None, default_agreement=DEFAULT_AGREEMENT,
@@ -153,24 +153,20 @@ def _render_exercise(nav, ex, messages):
 
 @participant_bp.route("/closed")
 @participant_page
-def closed():
+def closed(nav):
     """The resting screen, while the study is closed in lock mode. Everything
     else redirects here, except Get help now and the safety plan."""
-    hours = participant_nav.opening_hours(get_provider_id_for_patient(current_user.id))
-    if not participant_nav.locked_out(hours):
+    if not participant_nav.locked_out(nav.opening_hours):
         return redirect("/dashboard")
-    nav = participant_nav.build(current_user)
-    return render_template("participant/closed.html", nav=nav, hours=hours)
+    return render_template("participant/closed.html", nav=nav, hours=nav.opening_hours)
 
 
-# Placeholders until their pages land (stage 1, pull request 3).
 @participant_bp.route("/notebook")
 @participant_page
-def notebook():
+def notebook(nav):
     """The participant's saved lines, grouped by the exercise they came from,
     newest first, each with the participant's own note. 404 when the study
     doesn't let participants save, as the menu leaves it out then."""
-    nav = participant_nav.build(current_user)
     if not nav.can_save:
         abort(404)
     groups = {}
@@ -178,17 +174,16 @@ def notebook():
         group = groups.setdefault(selection.conversation_id, {
             "title": title, "exercise": nav.exercise_for_conversation(selection.conversation_id), "lines": []})
         group["lines"].append(selection)
-    return render_page("participant/notebook.html", current="notebook", nav=nav, groups=list(groups.values()),
+    return render_page("participant/notebook.html", nav, current="notebook", groups=list(groups.values()),
                        note_limit=SavedSelection.NOTE_LIMIT)
 
 
 @participant_bp.route("/safety-plan")
 @participant_page
-def safety_plan():
+def safety_plan(nav):
     """The participant's safety plan: their parts to add or change, and the
     care team's parts to read. Saving goes through today's
     /api/safety-plan/ endpoints (static/participant/safety-plan.js)."""
-    nav = participant_nav.build(current_user)
     # One of each status; the oldest wins, as in /api/safety-plan/.
     plans = {p.status: p for p in SafetyPlan.query.filter(
         SafetyPlan.patient_id == current_user.id,
@@ -200,13 +195,13 @@ def safety_plan():
     editing = {"your_turn": draft, "approved": active, "change_waiting": pending}.get(state)
     care = (active or pending or draft)
     return render_page(
-        "participant/safety_plan.html", current="safety_plan", nav=nav, state=state,
+        "participant/safety_plan.html", nav, current="safety_plan", state=state,
         shown=shown.to_dict(for_patient=True) if shown else None,
         editing=editing.to_dict(for_patient=True) if editing else None,
         care=care.to_dict(for_patient=True) if care else None,
         approved_at=active.approved_at if active else None,
         sent_at=pending.updated_at if pending else None,
-        allow_avoid=bool(get_effective_setting("allow_patient_anti_patterns", nav.provider_id, True)),
+        allow_avoid=bool(nav.settings.get("allow_patient_anti_patterns", True)),
         ratings=PLAN_RATINGS,
     )
 
@@ -223,12 +218,11 @@ PLAN_RATINGS = {
 @participant_bp.route("/reports")
 @participant_bp.route("/reports/<int:report_id>")
 @participant_page
-def reports(report_id=None):
+def reports(nav, report_id=None):
     """The participant's reports: a list, and one open (the newest unless
     report_id says otherwise). Only their own summary reports from visible
     windows, the same rule as /api/reports/. Report content is today's,
     from the unified report generator. 404 when reports are off."""
-    nav = participant_nav.build(current_user)
     if not nav.reports_enabled:
         abort(404)
     reports = participant_nav.participant_reports_query(current_user.id).all()
@@ -242,7 +236,7 @@ def reports(report_id=None):
     if report is not None:
         from report.generator import UnifiedReportGenerator
         html = UnifiedReportGenerator(report.window_id).render_html(json.loads(report.report_data or "{}"))
-    return render_page("participant/reports.html", current="reports", nav=nav, reports=reports, report=report,
+    return render_page("participant/reports.html", nav, current="reports", reports=reports, report=report,
                        report_html=html, groups={g.id: g for g in nav.groups}, preparing=nav.preparing_reports)
 
 

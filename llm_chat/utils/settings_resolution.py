@@ -41,6 +41,39 @@ def get_effective_setting(setting_name, provider_id=None, default=None):
     return _get_admin_setting(setting_name, default)
 
 
+class Settings:
+    """Effective settings for one provider, read from the database once: the
+    provider's flags row, and all AdminSettings rows the first time one is
+    needed. The same rules as get_effective_setting; use it where a request
+    reads several settings (the participant pages, sending a message)."""
+
+    def __init__(self, provider_id):
+        self.provider_id = provider_id
+        self._flags = (ProviderFeatureFlags.query.filter_by(provider_id=provider_id).first()
+                       if provider_id else None)
+        self._admin = None
+
+    def _admin_settings(self):
+        if self._admin is None:
+            self._admin = {}
+            for row in AdminSettings.query.all():
+                if row.setting_value:
+                    try:
+                        self._admin[row.setting_name] = json.loads(row.setting_value)
+                    except Exception:
+                        self._admin[row.setting_name] = row.setting_value
+        return self._admin
+
+    def get(self, name, default=None):
+        if name == 'enable_nlp_report' and not current_app.config["CLOZE_REPORTS_ENABLED"]:
+            return False
+        if self._flags is not None:
+            value = getattr(self._flags, name, None)
+            if value is not None:
+                return value
+        return self._admin_settings().get(name, default)
+
+
 def get_provider_id_for_patient(patient_id):
     """Look up the provider_id for a given patient. Returns None if unassigned.
 

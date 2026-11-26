@@ -12,7 +12,7 @@ from ..models import (
 )
 from ..services.llm_interface import LLMCallError, LLMInterface
 from ..models import ProviderFeatureFlags
-from ..utils.settings_resolution import get_effective_setting, get_provider_id_for_patient
+from ..utils.settings_resolution import Settings, get_effective_setting, get_provider_id_for_patient
 from ..services.greeting import resolve_greeting
 from ..services import participant_nav
 from ..services.conversation_end import end as end_conversation, stamp_window_closed
@@ -212,9 +212,16 @@ def get_conversations():
     nav = participant_nav.build(current_user)
     payload = []
 
+    # Every listed conversation's messages in one query.
+    messages_by_conversation = {chat.conversation.id: [] for chat in nav.chats}
+    if messages_by_conversation:
+        for m in (Message.query.filter(Message.conversation_id.in_(messages_by_conversation))
+                  .order_by(Message.timestamp, Message.id)):
+            messages_by_conversation[m.conversation_id].append(m)
+
     for chat in nav.chats:
         c, window, status = chat.conversation, chat.window, chat.status
-        msgs = c.messages.order_by(Message.timestamp).all()
+        msgs = messages_by_conversation[c.id]
         payload.append({
             'id': c.id,
             'title': c.title or 'Untitled Conversation',
@@ -320,6 +327,7 @@ def send_message(conversation_id):
 
     patient = current_user.is_patient()
     provider_id = get_provider_id_for_patient(conversation.user_id) if patient else None
+    settings = Settings(provider_id) if patient else None
 
     # CLOZE-Guard v0, before any refusal below: a concerning message raises its
     # alert even if the conversation has ended or chat is closed. (A retry of a
@@ -345,7 +353,7 @@ def send_message(conversation_id):
     max_turns = None
     turns_used = 0
     if patient:
-        max_turns = get_effective_setting('max_turns_per_conversation', provider_id)
+        max_turns = settings.get('max_turns_per_conversation')
         if max_turns:
             turns_used = Message.query.filter_by(conversation_id=conversation_id, role='user').count()
             if pending is not None:
@@ -359,7 +367,7 @@ def send_message(conversation_id):
 
     # Opening hours (CLOZE-Guard v0), the same rule the participant pages use.
     if patient:
-        hours = participant_nav.opening_hours(provider_id)
+        hours = participant_nav.opening_hours(provider_id, settings)
         if hours['enabled'] and not hours['open']:
             return jsonify({
                 'error': f"Chat is closed right now. Opening hours: {hours['schedule']}.",

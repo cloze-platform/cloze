@@ -31,7 +31,8 @@ from sqlalchemy import case, func
 
 from ..extensions import db
 from ..models import ChatTemplate, ChatWindow, Conversation, Message, Report, SafetyPlan, SavedSelection
-from ..utils.settings_resolution import get_effective_setting, get_provider_id_for_patient
+from ..utils.settings_resolution import Settings, get_provider_id_for_patient
+from ..utils.access_hours import DEFAULT_TZ
 from .conversation_end import stamp_window_closed
 
 NOT_STARTED, STARTED, FINISHED = "not_started", "started", "finished"
@@ -173,6 +174,7 @@ class Nav:
     groups: list           # every visible window, oldest first
     chats: list            # every conversation the participant can see, newest first
     max_turns: int | None
+    settings: Settings = field(repr=False, default=None)
 
     # ── Groups and exercises ──
 
@@ -225,11 +227,11 @@ class Nav:
 
     @cached_property
     def safety_plan(self):
-        return safety_plan_state(self.user.id, self.provider_id)
+        return safety_plan_state(self.user.id, self.provider_id, self.settings)
 
     @cached_property
     def can_save(self):
-        return bool(get_effective_setting("users_can_save_selections", self.provider_id, True))
+        return bool(self.settings.get("users_can_save_selections", True))
 
     @cached_property
     def notebook_count(self):
@@ -237,7 +239,7 @@ class Nav:
 
     @cached_property
     def reports_enabled(self):
-        return bool(get_effective_setting("enable_nlp_report", self.provider_id, True))
+        return bool(self.settings.get("enable_nlp_report", True))
 
     @cached_property
     def report_count(self):
@@ -256,7 +258,7 @@ class Nav:
 
     @cached_property
     def opening_hours(self):
-        return opening_hours(self.provider_id)
+        return opening_hours(self.provider_id, self.settings)
 
     @cached_property
     def active_plan(self):
@@ -277,14 +279,15 @@ class Nav:
     @cached_property
     def timezone(self):
         """The study's timezone, for dates on the participant's pages."""
-        return get_effective_setting("access_hours_timezone", self.provider_id, "America/New_York")
+        return self.settings.get("access_hours_timezone", DEFAULT_TZ)
 
 
 def build(user, now=None):
     """Everything a participant's pages show about their study, as of now."""
     now = time.time() if now is None else now
     provider_id = get_provider_id_for_patient(user.id) if user.is_patient() else None
-    max_turns = get_effective_setting("max_turns_per_conversation", provider_id) if user.is_patient() else None
+    settings = Settings(provider_id)
+    max_turns = settings.get("max_turns_per_conversation") if user.is_patient() else None
 
     windows = (ChatWindow.query.filter_by(patient_id=user.id, visible=True)
                .order_by(ChatWindow.id).all())
@@ -320,7 +323,8 @@ def build(user, now=None):
                                         turns_used=user_turns, max_turns=max_turns))
 
     return Nav(user=user, now=now, provider_id=provider_id, groups=list(groups.values()),
-               chats=_visible_chats(conversations, windows_by_id, counts, now), max_turns=max_turns)
+               chats=_visible_chats(conversations, windows_by_id, counts, now), max_turns=max_turns,
+               settings=settings)
 
 
 def _message_counts(conversation_ids):
@@ -351,8 +355,9 @@ def _visible_chats(conversations, windows, counts, now):
     return chats
 
 
-def safety_plan_state(patient_id, provider_id):
-    required = bool(get_effective_setting("require_safety_plan", provider_id, True))
+def safety_plan_state(patient_id, provider_id, settings=None):
+    settings = settings or Settings(provider_id)
+    required = bool(settings.get("require_safety_plan", True))
     if not required:
         return SafetyPlanState(required=False, state="off")
     plans = SafetyPlan.query.filter(SafetyPlan.patient_id == patient_id,
@@ -418,18 +423,19 @@ def participant_reports_query(patient_id):
 LOCK, READ_ONLY = "lock", "read_only"
 
 
-def opening_hours(provider_id):
+def opening_hours(provider_id, settings=None):
     """The study's opening hours now: {"enabled": False}, or enabled with
     open, schedule, reopen and reopens_at (see utils.access_hours.window_status)
     and mode: lock or read_only (ProviderFeatureFlags.access_hours_mode)."""
-    if not get_effective_setting("access_hours_enabled", provider_id, False):
+    settings = settings or Settings(provider_id)
+    if not settings.get("access_hours_enabled", False):
         return {"enabled": False}
-    start = get_effective_setting("access_hours_start", provider_id)
-    end = get_effective_setting("access_hours_end", provider_id)
+    start = settings.get("access_hours_start")
+    end = settings.get("access_hours_end")
     if not start or not end:
         return {"enabled": False}
-    tz = get_effective_setting("access_hours_timezone", provider_id, "America/New_York")
-    days_raw = get_effective_setting("access_hours_days", provider_id)
+    tz = settings.get("access_hours_timezone", DEFAULT_TZ)
+    days_raw = settings.get("access_hours_days")
     try:
         days = json.loads(days_raw) if days_raw else None
     except (TypeError, ValueError):
@@ -438,7 +444,7 @@ def opening_hours(provider_id):
     from ..utils.access_hours import window_status
     status = window_status(start, end, tz, days)
     status["enabled"] = True
-    mode = get_effective_setting("access_hours_mode", provider_id, LOCK)
+    mode = settings.get("access_hours_mode", LOCK)
     status["mode"] = READ_ONLY if mode == READ_ONLY else LOCK
     return status
 
