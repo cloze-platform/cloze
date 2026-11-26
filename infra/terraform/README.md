@@ -157,11 +157,39 @@ Set `theme` in `terraform.tfvars` to give an instance its own palette, then plan
 
 ## Deploying a new version
 
-1. Build it (step 7) from the release tag or commit.
-2. If the release adds database columns or tables, first run the admin task (step 8) with `--overrides '{"containerOverrides":[{"name":"admin","command":["python","migrate_schema.py","--apply"]}]}'`.
-3. Set `image_tag` to the new commit SHA, then plan and apply.
+1. **Snapshot the database:**
 
-ECS starts new tasks, waits for them to pass health checks, then drains the old ones. If they never become healthy, it rolls back automatically.
+   ```bash
+   aws rds create-db-snapshot --profile <profile> --db-instance-identifier <name> \
+     --db-snapshot-identifier <name>-before-<version>
+   ```
+
+2. **Build the image** (step 7) from the release tag, and note the commit SHA it pushed.
+
+3. **Run the migration, if the release has one**, with the **new** image and **before** the app moves to it. The release's changelog says under **Upgrade** whether there is one.
+
+   The app and the admin task share `image_tag`. So first point only the admin task definition at the new image. Otherwise the admin task runs the *old* `migrate_schema.py`, which doesn't know about the new columns.
+
+   ```bash
+   terraform apply -var "image_tag=<sha>" -target=module.cloze.aws_ecs_task_definition.admin
+   ```
+
+   (`module.cloze` is the module's address in `examples/single-instance`; use yours if your configuration names it differently.)
+
+   Then run the admin task as in step 8, overriding its command. Run it first without `--apply`, which prints what it will change, then with it:
+
+   ```bash
+   aws ecs run-task --profile <profile> --cluster <name> --task-definition <name>-admin \
+     --launch-type FARGATE --network-configuration "$NET" \
+     --overrides '{"containerOverrides":[{"name":"admin","command":["python","migrate_schema.py","--apply"]}]}'
+   aws logs tail /<name>/admin --profile <profile> --follow
+   ```
+
+   New columns are nullable, so the running version is unaffected. The new version would fail against the old schema, which is why this comes first.
+
+4. **Move the app:** set `image_tag` to the new commit SHA in `terraform.tfvars`, then plan and apply.
+
+ECS starts new tasks, waits for them to pass health checks, then drains the old ones. If they never become healthy, it rolls back automatically. To roll back by hand, set `image_tag` back to the previous SHA and apply. The migration's new columns can stay, because older versions ignore them.
 
 ## Requirements this places on the app
 
