@@ -1,8 +1,9 @@
 {# Get help now: crisis lines, the care team from an approved safety plan,
    and the participant's first coping strategy. Shown in the menu's dialog
-   and on /help. heading_id lets the dialog and the page label it. #}
-{% set plan = nav.active_plan %}
-{% set coping = (plan.get_coping_strategies() if plan else [])|selectattr("strategy")|list %}
+   and on /help. heading_id lets the dialog and the page label it. The plan's
+   parts come from nav.help_content, which never fails; without nav (the
+   help page when the menu's data couldn't load), only the crisis lines show. #}
+{% set extra = nav.help_content if nav else {"care_team": [], "coping": none} %}
 <div class="flex flex-col gap-5">
   <div class="flex flex-col gap-3">
     <span aria-hidden="true" class="flex h-12 w-12 items-center justify-center rounded-full bg-p-help-soft text-p-help">{{ icon("heart", 24, "", 1.9) }}</span>
@@ -26,7 +27,7 @@
         </a>
       </li>
     {% endfor %}
-    {% for member in (plan.get_care_team() if plan else []) if member.name %}
+    {% for member in extra.care_team %}
       <li class="flex min-h-[60px] items-start gap-3.5 rounded-2xl border border-p-line bg-p-surface px-4 py-3">
         <span class="mt-0.5 text-p-ink-3">{{ icon("user", 20, "", 1.9) }}</span>
         <span class="flex flex-col gap-0.5">
@@ -38,10 +39,10 @@
     {% endfor %}
   </ul>
 
-  {% if coping %}
+  {% if extra.coping %}
     <section aria-labelledby="{{ heading_id }}-plan" class="flex flex-col gap-2 rounded-2xl bg-p-quiet px-4 py-4">
       <h3 id="{{ heading_id }}-plan" class="text-sm font-semibold text-p-ink-3">From your safety plan</h3>
-      <p class="text-base leading-relaxed text-p-ink">{{ coping[0].patient_language or coping[0].strategy }}</p>
+      <p class="text-base leading-relaxed text-p-ink">{{ extra.coping }}</p>
       <a href="{{ url_for('participant.safety_plan') }}" class="self-start text-[15px] font-semibold text-p-accent-ink">Open my safety plan</a>
     </section>
   {% endif %}

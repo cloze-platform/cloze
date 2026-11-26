@@ -142,3 +142,4 @@ class SavedSelection(db.Model):
     created_at = db.Column(db.Float, default=lambda: time.time())
 
     NOTE_LIMIT = 1000
+    TEXT_LIMIT = 20_000

@@ -9,12 +9,6 @@ from llm_chat.models import AdminSettings, ProviderFeatureFlags, Report
 PAYLOAD = '<img src=x onerror="alert(1)">'
 
 
-@pytest.fixture
-def v2(db):
-    db.session.add(AdminSettings(setting_name="participant_ui", setting_value="v2"))
-    db.session.commit()
-
-
 def _report(db, study, window, report_type="summary", patient=None, summary="A good week."):
     data = {"report_type": report_type, "generated_at": 0, "window_title": window.title,
             "summary": {"total_conversations": 1, "total_user_messages": 2, "total_model_messages": 2},
@@ -91,3 +85,51 @@ def test_a_window_with_a_report_is_not_being_prepared(study, login_as, v2, db):
     main = _main(login_as(study["patient"]))
     assert "Being prepared" not in main
     assert "being prepared" not in login_as(study["patient"]).get("/dashboard").get_data(as_text=True)
+
+
+# ── The report API: what a participant may read (GHSA-q2w6-964m-7xh5) ──
+
+def _paths(report):
+    return [f"/api/reports/{report.id}", f"/api/reports/html/{report.id}", f"/api/reports/download/{report.id}/html"]
+
+
+def test_participants_read_their_own_summaries(study, login_as, db):
+    summary = _report(db, study, study["pilot"])
+    client = login_as(study["patient"])
+    for path in _paths(summary):
+        assert client.get(path).status_code == 200, path
+    # today's dashboard: the window's report, then its HTML
+    assert client.get(f"/api/reports/window/{study['pilot'].id}").get_json()["id"] == summary.id
+    assert client.get(f"/api/reports/download/window/{study['pilot'].id}/summary/html").status_code == 200
+
+
+def test_detailed_reports_are_for_the_research_team(study, login_as, db):
+    _report(db, study, study["pilot"])
+    detailed = _report(db, study, study["pilot"], report_type="detailed", summary="For researchers.")
+    client = login_as(study["patient"])
+    for path in _paths(detailed) + [f"/api/reports/download/window/{study['pilot'].id}/detailed/html"]:
+        assert client.get(path).status_code == 404, path
+    window_report = client.get(f"/api/reports/window/{study['pilot'].id}?type=detailed").get_json()
+    assert window_report["report_type"] == "summary"
+    assert login_as(study["provider"]).get(f"/api/reports/html/{detailed.id}").status_code == 200
+
+
+def test_reports_from_hidden_windows_are_closed(study, login_as, db):
+    hidden = _report(db, study, study["hidden"])
+    client = login_as(study["patient"])
+    for path in _paths(hidden) + [f"/api/reports/window/{study['hidden'].id}"]:
+        assert client.get(path).status_code == 404, path
+
+
+def test_reports_off_means_no_reports_through_the_api(study, login_as, db):
+    summary = _report(db, study, study["pilot"])
+    db.session.add(ProviderFeatureFlags(provider_id=study["provider"].id, enable_nlp_report=False))
+    db.session.commit()
+    client = login_as(study["patient"])
+    assert client.get("/api/reports/").get_json() == []
+    for path in _paths(summary) + [f"/api/reports/window/{study['pilot'].id}"]:
+        assert client.get(path).status_code == 404, path
+
+
+def test_live_reports_are_for_the_research_team(study, login_as):
+    assert login_as(study["patient"]).get(f"/api/reports/live/{study['pilot'].id}").status_code == 403

@@ -7,7 +7,6 @@
   if (!form) return;
   var view = document.getElementById("plan-view");
   var error = document.getElementById("plan-error");
-  var announcer = document.getElementById("announcer");
   var isDraft = form.dataset.draft === "true";
 
   var SECTIONS = {
@@ -78,17 +77,6 @@
     error.scrollIntoView({ block: "center", behavior: "smooth" });
   }
 
-  async function request(method, url, body) {
-    var response = await fetch(url, {
-      method: method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    var data = await response.json().catch(function () { return {}; });
-    if (!response.ok) throw new Error(data.error || "Your plan wasn't saved. Please try again.");
-    return data;
-  }
-
   async function save(send) {
     error.classList.add("hidden");
     var data = collect();
@@ -106,7 +94,7 @@
     var buttons = form.querySelectorAll("button[type=submit], [data-save]");
     buttons.forEach(function (b) { b.disabled = true; });
     try {
-      await request("PUT", "/api/safety-plan/patient-sections", data);
+      await Cloze.api("PUT", "/api/safety-plan/patient-sections", data);
       // Each new thing to avoid is posted once: its row goes as soon as it's
       // saved, so trying again after an error doesn't add it twice.
       var rows = form.querySelectorAll('[data-section="anti_patterns"] [data-rows] [data-row]');
@@ -114,11 +102,10 @@
         var pattern = rows[i].querySelector('[data-field="pattern"]').value.trim();
         if (!pattern) continue;
         var reason = rows[i].querySelector('[data-field="reason"]').value.trim();
-        await request("POST", "/api/safety-plan/anti-pattern", { pattern: pattern, reason: reason });
+        await Cloze.api("POST", "/api/safety-plan/anti-pattern", { pattern: pattern, reason: reason });
         rows[i].remove();
       }
-      announcer.textContent = send ? "Sent to your care team." : "Saved.";
-      window.location.reload();
+      window.location.reload();          // the page shows where the plan now stands
     } catch (e) {
       showError(e.message);
       buttons.forEach(function (b) { b.disabled = false; });

@@ -5,12 +5,6 @@ import pytest
 from llm_chat.models import AdminSettings
 
 
-@pytest.fixture
-def v2(db):
-    db.session.add(AdminSettings(setting_name="participant_ui", setting_value="v2"))
-    db.session.commit()
-
-
 def _location(client, path):
     resp = client.get(path)
     assert resp.status_code == 302, (path, resp.status_code)

@@ -4,7 +4,6 @@
   var chat = document.querySelector("[data-save-to]");
   var bar = document.getElementById("save-bar");
   var button = document.getElementById("save-button");
-  var announcer = document.getElementById("announcer");
   if (!chat || !bar || !button) return;
   var label = button.querySelector("span");
 
@@ -56,10 +55,15 @@
     }, 150);
   });
   // The bar is fixed to the window, so it follows the selection as the page scrolls.
+  var queued = false;
   window.addEventListener("scroll", function () {
-    if (!current || button.disabled) return;
-    var found = selectedInChat();
-    found ? place(found.rect) : hide();
+    if (!current || button.disabled || queued) return;
+    queued = true;
+    requestAnimationFrame(function () {         // once per frame, not per scroll event
+      queued = false;
+      var found = selectedInChat();
+      found ? place(found.rect) : hide();
+    });
   }, { passive: true });
 
   // Keep the selection when the button is pressed.
@@ -70,14 +74,10 @@
     var saving = current;
     button.disabled = true;
     try {
-      var response = await fetch("/api/save_selection", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversation_id: conversationId, text: saving.text, message_ids: saving.messageIds }),
-      });
-      if (!response.ok) throw new Error();
+      await Cloze.api("POST", "/api/save_selection",
+                      { conversation_id: conversationId, text: saving.text, message_ids: saving.messageIds });
       if (window.ParticipantPanel) window.ParticipantPanel.addLine(saving.text, title);
-      announcer.textContent = "Saved to your notebook.";
+      Cloze.announce("Saved to your notebook.");
       label.textContent = "Saved";
       setTimeout(function () {
         window.getSelection().removeAllRanges();
@@ -86,7 +86,7 @@
         button.disabled = false;
       }, 900);
     } catch (e) {
-      announcer.textContent = "That line wasn't saved. Please try again.";
+      Cloze.announce("That line wasn't saved. Please try again.");
       label.textContent = "Not saved. Try again";
       button.disabled = false;
     }

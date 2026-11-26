@@ -31,10 +31,10 @@ def _find_hits(text, keywords):
     return hits
 
 
-def _already_escalated(patient_id, conversation_id, client_message_id):
+def _already_escalated(patient_id, conversation_id, client_message_id, text):
     """The event already raised for this message, if a send of it was retried
-    (same client_message_id). Retries come within minutes, so only the last
-    day's events are checked."""
+    (same client_message_id and text). Retries come within minutes, so only
+    the last day's events are checked."""
     recent = EscalationEvent.query.filter(
         EscalationEvent.patient_id == patient_id,
         EscalationEvent.event_type == "keyword_match",
@@ -46,7 +46,8 @@ def _already_escalated(patient_id, conversation_id, client_message_id):
         except (TypeError, ValueError):
             continue
         if (context.get("client_message_id") == client_message_id
-                and context.get("conversation_id") == conversation_id):
+                and context.get("conversation_id") == conversation_id
+                and context.get("snippet") == text[:280]):
             return event
     return None
 
@@ -79,7 +80,7 @@ def scan_and_escalate(patient, conversation, text, client_message_id=None):
         return None
 
     if client_message_id:
-        earlier = _already_escalated(patient.id, conversation.id, client_message_id)
+        earlier = _already_escalated(patient.id, conversation.id, client_message_id, text)
         if earlier is not None:
             return earlier
 

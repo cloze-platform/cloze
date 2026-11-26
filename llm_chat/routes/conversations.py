@@ -12,8 +12,7 @@ from ..models import (
 )
 from ..services.llm_interface import LLMCallError, LLMInterface
 from ..models import ProviderFeatureFlags
-from ..utils.settings_resolution import get_effective_setting, get_provider_id_for_patient
-from ..utils.access_hours import within_access_window
+from ..utils.settings_resolution import Settings, get_effective_setting, get_provider_id_for_patient
 from ..services.greeting import resolve_greeting
 from ..services import participant_nav
 from ..services.conversation_end import end as end_conversation, stamp_window_closed
@@ -35,7 +34,7 @@ def user_dashboard():
     # A link into today's page (/dashboard?conversation=<id>) opens the exercise.
     if uses_v2():
         conversation_id = request.args.get('conversation', '')
-        if conversation_id.isdigit():
+        if re.fullmatch(r'[0-9]{1,12}', conversation_id):
             return redirect(url_for('participant.exercise', conversation_id=int(conversation_id)))
         return render_participant_home()
     return render_template("user_dashboard.html")
@@ -213,9 +212,16 @@ def get_conversations():
     nav = participant_nav.build(current_user)
     payload = []
 
+    # Every listed conversation's messages in one query.
+    messages_by_conversation = {chat.conversation.id: [] for chat in nav.chats}
+    if messages_by_conversation:
+        for m in (Message.query.filter(Message.conversation_id.in_(messages_by_conversation))
+                  .order_by(Message.timestamp, Message.id)):
+            messages_by_conversation[m.conversation_id].append(m)
+
     for chat in nav.chats:
         c, window, status = chat.conversation, chat.window, chat.status
-        msgs = c.messages.order_by(Message.timestamp).all()
+        msgs = messages_by_conversation[c.id]
         payload.append({
             'id': c.id,
             'title': c.title or 'Untitled Conversation',
@@ -272,10 +278,22 @@ def get_conversations():
 @conv_bp.route("/api/conversation/<int:conversation_id>/message", methods=["POST"])
 @login_required
 def send_message(conversation_id):
+    """Send a message and get the model's reply.
+
+    The new participant page names each message (client_message_id). For it:
+    the message is saved before the model is called, so a failed reply never
+    loses what the participant wrote; a retry with the same id completes that
+    message (or returns its saved reply) instead of sending it again; and a
+    reply the provider blocks gets a fixed reply pointing to crisis help.
+    Today's page sends no id and keeps today's behaviour, where a failure
+    comes back as a friendly reply.
+    """
     conversation = db.get_or_404(Conversation, conversation_id)
 
-    # Access check
-    if conversation.user_id != current_user.id and not current_user.can_access_patient(conversation.user_id):
+    # Only the conversation's own user sends in it. Researchers and admins can
+    # read a participant's conversation, but a message they sent would be saved
+    # as the participant's words.
+    if conversation.user_id != current_user.id:
         abort(403)
 
     # Participant chats must come from a chat window: only that path stores the
@@ -288,18 +306,36 @@ def send_message(conversation_id):
     message_text = data.get('message')
     if not isinstance(message_text, str) or not message_text.strip():
         return jsonify({'error': 'Write a message first.'}), 400
+    if len(message_text) > MESSAGE_LIMIT:
+        return jsonify({'error': f'Messages can be up to {MESSAGE_LIMIT:,} characters.'}), 400
 
-    # The new participant page names each message (client_message_id), so a
-    # send it retries, after a lost connection or a failed reply, is
-    # recognised: the saved reply comes back and nothing is sent twice. Today's
-    # page sends no id and keeps today's behaviour.
     client_id = data.get('client_message_id')
+    pending = None      # this message, saved by an earlier try whose reply failed
     if client_id is not None:
         if not isinstance(client_id, str) or not CLIENT_MESSAGE_ID.fullmatch(client_id):
             return jsonify({'error': 'client_message_id must be 8 to 64 letters, digits or dashes'}), 400
         saved = Message.query.filter_by(conversation_id=conversation.id, client_message_id=client_id).first()
         if saved is not None:
-            return _repeat_result(conversation, saved)
+            if saved.content != message_text:
+                # New text under a used id (only a hand-made client does this):
+                # refuse it, but still scan it.
+                if current_user.is_patient():
+                    _guard_scan(conversation, message_text, None)
+                return jsonify({'error': 'That message id belongs to a different message.'}), 409
+            reply = _reply_to(saved)
+            if reply is not None:
+                return _send_result(conversation, saved, reply, repeat=True)
+            pending = saved
+
+    patient = current_user.is_patient()
+    provider_id = get_provider_id_for_patient(conversation.user_id) if patient else None
+    settings = Settings(provider_id) if patient else None
+
+    # CLOZE-Guard v0, before any refusal below: a concerning message raises its
+    # alert even if the conversation has ended or chat is closed. (A retry of a
+    # saved message was scanned on its first try.)
+    if patient and pending is None:
+        _guard_scan(conversation, message_text, client_id)
 
     # An ended conversation stays ended (services/conversation_end.py).
     window = db.session.get(ChatWindow, conversation.window_id) if conversation.window_id else None
@@ -314,17 +350,16 @@ def send_message(conversation_id):
         if not window.visible or status != 'active':
             return jsonify({'error': 'Chat window has expired or is no longer active'}), 403
 
-    # Max turns per conversation enforcement
+    # Max turns per conversation enforcement. A saved message being completed
+    # already counts.
     max_turns = None
     turns_used = 0
-    if current_user.is_patient():
-        provider_id = get_provider_id_for_patient(current_user.id)
-        max_turns = get_effective_setting('max_turns_per_conversation', provider_id)
+    if patient:
+        max_turns = settings.get('max_turns_per_conversation')
         if max_turns:
-            turns_used = Message.query.filter_by(
-                conversation_id=conversation_id,
-                role='user'
-            ).count()
+            turns_used = Message.query.filter_by(conversation_id=conversation_id, role='user').count()
+            if pending is not None:
+                turns_used -= 1
             if turns_used >= max_turns:
                 return jsonify({
                     'error': f'This conversation has reached its maximum of {max_turns} exchanges.',
@@ -332,26 +367,18 @@ def send_message(conversation_id):
                     'max_turns': max_turns,
                 }), 403
 
-    # CLOZE-Guard v0: study-wide access-hours restriction (per-provider)
-    if current_user.is_patient():
-        provider_id = get_provider_id_for_patient(current_user.id)
-        if get_effective_setting('access_hours_enabled', provider_id, False):
-            start = get_effective_setting('access_hours_start', provider_id)
-            end = get_effective_setting('access_hours_end', provider_id)
-            tz = get_effective_setting('access_hours_timezone', provider_id, 'America/New_York')
-            days_raw = get_effective_setting('access_hours_days', provider_id)
-            try:
-                days = json.loads(days_raw) if days_raw else None
-            except (TypeError, ValueError):
-                days = None
-            if not within_access_window(start, end, tz, days):
-                return jsonify({
-                    'error': f'Chat is available {start}–{end} ({tz}).',
-                    'outside_access_hours': True,
-                }), 403
+    # Opening hours (CLOZE-Guard v0), the same rule the participant pages use.
+    if patient:
+        hours = participant_nav.opening_hours(provider_id, settings)
+        if hours['enabled'] and not hours['open']:
+            return jsonify({
+                'error': f"Chat is closed right now. Opening hours: {hours['schedule']}.",
+                'outside_access_hours': True,
+            }), 403
 
-    # Time window and limits for patients
-    if current_user.is_patient():
+    # Time window and limits for patients (a saved message being completed was
+    # already let through)
+    if patient and pending is None:
         provider_assignment = ProviderPatient.query.filter_by(patient_id=current_user.id).first()
         if provider_assignment:
             settings = ProviderSettings.query.filter_by(
@@ -375,37 +402,12 @@ def send_message(conversation_id):
                     if today_messages >= settings.max_messages_per_day:
                         return jsonify({'error': 'Daily message limit reached'}), 403
 
-    # The model sees the latest 20 messages, read before the new one is saved
-    # so it isn't sent twice, then the new message.
-    recent = (conversation.messages.order_by(None)
-              .order_by(Message.timestamp.desc(), Message.id.desc()).limit(20).all())
-    history = [{'role': m.role, 'content': m.content} for m in reversed(recent)]
-    history.append({'role': 'user', 'content': message_text})
-
-    # CLOZE-Guard v0: keyword pre-classifier. Best-effort — must never block chat.
-    # It runs before anything is saved, because it commits its alert: a reply
-    # that then fails must not take the alert with it, and a retry of the same
-    # message (client_id) doesn't alert again.
-    if current_user.is_patient():
-        try:
-            from ..services.guard import scan_and_escalate
-            scan_and_escalate(current_user, conversation, message_text, client_message_id=client_id)
-        except Exception:
-            current_app.logger.exception("CLOZE-Guard scan failed")
-
-    # Save user message
-    user_message = Message(
-        conversation_id=conversation_id,
-        role='user',
-        content=message_text,
-        timestamp=time.time(),
-        client_message_id=client_id,
-    )
-    db.session.add(user_message)
-
-    # Generate title if first message
-    if conversation.messages.count() == 0:
-        conversation.generate_title()
+    # The model sees the latest 20 messages before this one, then this one.
+    earlier = conversation.messages.order_by(None).order_by(Message.timestamp.desc(), Message.id.desc())
+    if pending is not None:
+        earlier = earlier.filter(Message.id != pending.id)
+    history = _join_runs([{'role': m.role, 'content': m.content} for m in reversed(earlier.limit(20).all())]
+                         + [{'role': 'user', 'content': message_text}])
 
     system_prompt = conversation.system_prompt_content
 
@@ -437,66 +439,91 @@ def send_message(conversation_id):
             else:
                 system_prompt = turn_notice
 
-    # Call LLM. For the new page (client_id), a failed call saves nothing and
-    # says so, and the page offers Try again. Today's page gets the failure
-    # as a friendly reply, as before.
+    # Save the participant's message. For the new page it's committed before
+    # the model is called, so it's kept whatever happens to the reply.
+    if pending is None:
+        user_message = Message(conversation_id=conversation_id, role='user', content=message_text,
+                               timestamp=time.time(), client_message_id=client_id)
+        db.session.add(user_message)
+        if client_id is not None:
+            try:
+                db.session.commit()
+            except IntegrityError:
+                # The same message sent twice at once: the other request has it.
+                db.session.rollback()
+                return jsonify({'error': 'This message is already being sent.', 'in_progress': True,
+                                'retry': True}), 409
+    else:
+        user_message = pending
+
     try:
         response_text, response_time = LLMInterface.call_llm(
             conversation.model, history, system_prompt, raise_on_error=client_id is not None)
     except LLMCallError as e:
-        db.session.rollback()
-        return jsonify({'error': e.user_message, 'reply_failed': True, 'retry': True}), 502
+        if e.retryable:
+            return jsonify({'error': e.user_message, 'reply_failed': True, 'retry': True, 'saved': True,
+                            'user_message_id': user_message.id}), 502
+        # Blocked by the provider's safety filter: trying again won't help.
+        # Answer with a fixed reply that points to crisis help.
+        response_text, response_time = BLOCKED_REPLY, None
 
-    # Save assistant message
-    assistant_message = Message(
-        conversation_id=conversation_id,
-        role='assistant',
-        content=response_text,
-        timestamp=time.time(),
-        response_time=response_time
-    )
+    assistant_message = Message(conversation_id=conversation_id, role='assistant', content=response_text,
+                                timestamp=time.time(), response_time=response_time)
     db.session.add(assistant_message)
-
     conversation.updated_at = time.time()
     if max_turns and turns_remaining <= 0:
         end_conversation(conversation, Conversation.TURN_LIMIT)
-    try:
-        db.session.commit()
-    except IntegrityError:
-        # The same message sent twice at once: the other request saved it.
-        db.session.rollback()
-        saved = Message.query.filter_by(conversation_id=conversation.id, client_message_id=client_id).first()
-        if client_id is None or saved is None:
-            raise
-        return _repeat_result(conversation, saved)
-
-    result = {'response': response_text, 'message_id': assistant_message.id,
-              'user_message_id': user_message.id,
-              'ended': conversation.ended_at is not None, 'end_reason': conversation.end_reason}
-    if max_turns:
-        result['turns_remaining'] = max(0, turns_remaining)
-        result['max_turns'] = max_turns
-        result['turn_limit_reached'] = turns_remaining <= 0
-    return jsonify(result)
+    db.session.commit()
+    return _send_result(conversation, user_message, assistant_message, max_turns=max_turns)
 
 
+MESSAGE_LIMIT = 10_000
 CLIENT_MESSAGE_ID = re.compile(r'[A-Za-z0-9-]{8,64}')
+BLOCKED_REPLY = ("I can't reply to that here. If you're going through something hard right now, "
+                 "you can call or text 988, or use Get help now.")
 
 
-def _repeat_result(conversation, saved):
-    """The answer to a send the server already handled (same
-    client_message_id): its saved reply, as the first send would have got it."""
-    reply = (Message.query
-             .filter(Message.conversation_id == conversation.id, Message.role == 'assistant',
-                     Message.id > saved.id)
-             .order_by(Message.id).first())
-    if reply is None:
-        return jsonify({'error': 'The reply to this message is missing.', 'reply_failed': True}), 409
-    result = {'response': reply.content, 'message_id': reply.id, 'user_message_id': saved.id, 'repeat': True,
+def _guard_scan(conversation, text, client_id):
+    """CLOZE-Guard's keyword scan. Best-effort: a failure is logged loudly and
+    never blocks the participant's message."""
+    try:
+        from ..services.guard import scan_and_escalate
+        scan_and_escalate(current_user, conversation, text, client_message_id=client_id)
+    except Exception:
+        db.session.rollback()
+        current_app.logger.critical("CLOZE-Guard scan failed", exc_info=True)
+
+
+def _join_runs(history):
+    """Messages for the model, with consecutive messages from the same side
+    joined: a participant message whose reply failed can sit before the next."""
+    joined = []
+    for entry in history:
+        if joined and joined[-1]['role'] == entry['role']:
+            joined[-1] = {'role': entry['role'], 'content': joined[-1]['content'] + '\n\n' + entry['content']}
+        else:
+            joined.append(entry)
+    return joined
+
+
+def _reply_to(user_message):
+    """The model's reply to a participant message: the next assistant message
+    before the participant's next message, if any."""
+    following = (Message.query
+                 .filter(Message.conversation_id == user_message.conversation_id, Message.id > user_message.id)
+                 .order_by(Message.id).first())
+    return following if following is not None and following.role == 'assistant' else None
+
+
+def _send_result(conversation, user_message, reply, max_turns=None, repeat=False):
+    result = {'response': reply.content, 'message_id': reply.id, 'user_message_id': user_message.id,
               'ended': conversation.ended_at is not None, 'end_reason': conversation.end_reason}
+    if repeat:
+        result['repeat'] = True
     if current_user.is_patient():
-        max_turns = get_effective_setting('max_turns_per_conversation',
-                                          get_provider_id_for_patient(conversation.user_id))
+        if max_turns is None:
+            max_turns = get_effective_setting('max_turns_per_conversation',
+                                              get_provider_id_for_patient(conversation.user_id))
         if max_turns:
             used = Message.query.filter_by(conversation_id=conversation.id, role='user').count()
             result['turns_remaining'] = max(0, max_turns - used)
@@ -540,12 +567,25 @@ def save_selection():
     if not current_user.can_access_patient(conversation.user_id):
         abort(403)
 
+    text, note = data.get('text'), data.get('note')
+    if not isinstance(text, str) or not text.strip() or len(text) > SavedSelection.TEXT_LIMIT:
+        return jsonify({'error': f'Saved text must be 1 to {SavedSelection.TEXT_LIMIT:,} characters.'}), 400
+    if note is not None and (not isinstance(note, str) or len(note) > SavedSelection.NOTE_LIMIT):
+        return jsonify({'error': f'Notes can be up to {SavedSelection.NOTE_LIMIT:,} characters.'}), 400
+    # Today's pages send the ids as strings (from data attributes); keep them as numbers.
+    message_ids = data.get('message_ids') or []
+    if (not isinstance(message_ids, list) or len(message_ids) > 200
+            or not all(isinstance(i, int) and not isinstance(i, bool)
+                       or isinstance(i, str) and re.fullmatch(r'[0-9]{1,12}', i) for i in message_ids)):
+        return jsonify({'error': 'message_ids must be a list of message ids'}), 400
+    message_ids = [int(i) for i in message_ids]
+
     selection = SavedSelection(
         user_id=current_user.id,
         conversation_id=conversation_id,
-        selection_text=data['text'],
-        message_ids=json.dumps(data.get('message_ids', [])),
-        note=data.get('note')
+        selection_text=text,
+        message_ids=json.dumps(message_ids),
+        note=note or None
     )
     db.session.add(selection)
     db.session.commit()

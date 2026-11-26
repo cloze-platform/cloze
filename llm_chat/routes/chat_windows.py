@@ -332,6 +332,10 @@ def start_conversation_from_template():
     # Check if window is for current patient and is active
     if window.patient_id != current_user.id or not window.is_current():
         abort(403)
+    # Hidden templates and windows (withdrawn participants' windows among them)
+    # don't exist for the participant (services/participant_nav.py).
+    if not template.visible or not window.visible:
+        abort(404)
 
     # Safety plan gating: patient must have an active (approved) safety plan
     if get_effective_setting('require_safety_plan', window.provider_id, True):

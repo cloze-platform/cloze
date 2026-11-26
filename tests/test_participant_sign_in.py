@@ -4,14 +4,6 @@ import time
 
 import pytest
 
-from llm_chat.models import AdminSettings
-
-
-@pytest.fixture
-def v2(db):
-    db.session.add(AdminSettings(setting_name="participant_ui", setting_value="v2"))
-    db.session.commit()
-
 
 def test_v1_keeps_todays_sign_in(client):
     html = client.get("/login").get_data(as_text=True)
@@ -37,12 +29,13 @@ def test_signed_out_pages_send_you_to_the_new_sign_in(client, v2):
     assert 'id="sign-in"' in client.get(resp.headers["Location"]).get_data(as_text=True)
 
 
-def test_a_locked_account_says_how_long(client, make_user, db):
+def test_a_locked_account_answers_like_a_wrong_password(client, make_user, db, v2):
     user = make_user("p1")
     user.locked_until = time.time() + 600
     db.session.commit()
     resp = client.post("/api/login", json={"username": "p1", "password": "pw-12345"})
-    assert resp.status_code == 423 and resp.get_json()["retry_after_minutes"] == 9
+    assert resp.status_code == 401 and resp.get_json() == {"status": "error", "message": "Invalid credentials"}
+    assert "signing in pauses for 15 minutes" in client.get("/login").get_data(as_text=True)
 
 
 @pytest.mark.parametrize("role, target", [("user", "/dashboard"), ("provider", "/provider/dashboard")])

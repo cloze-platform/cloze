@@ -5,7 +5,7 @@ from flask_login import login_required, current_user
 from ..extensions import db
 from ..models import Report, ChatWindow
 from ..services.report_utils import generate_report_for_window, finalize_expired_windows
-from ..utils.settings_resolution import get_effective_setting
+from ..utils.settings_resolution import get_effective_setting, get_provider_id_for_patient
 from ..services.participant_nav import participant_reports_query
 from report.generator import UnifiedReportGenerator
 
@@ -19,6 +19,27 @@ def _failed(action):
     return jsonify({'error': f'{action} failed. The details are in the server log.'}), 500
 
 
+# ── What a participant may read ────────────────────────────────
+# Their own summary reports, from windows still visible to them, while their
+# study has reports on: the rule the participant pages use. Detailed reports
+# are for the research team. Anything else is 404 to a participant.
+
+def _participant_reports_on():
+    return bool(get_effective_setting('enable_nlp_report', get_provider_id_for_patient(current_user.id), True))
+
+
+def _participant_may_read(report):
+    return (_participant_reports_on()
+            and participant_reports_query(current_user.id).filter(Report.id == report.id).first() is not None)
+
+
+def _participant_window_report(window):
+    """The summary report a participant may read for one of their windows, or None."""
+    if window.patient_id != current_user.id or not window.visible or not _participant_reports_on():
+        return None
+    return participant_reports_query(current_user.id).filter(Report.window_id == window.id).first()
+
+
 @reports_bp.route("/", methods=["GET"])
 @login_required
 def get_reports():
@@ -29,7 +50,7 @@ def get_reports():
     summary_filter = Report.report_type.in_(['summary', 'default'])
 
     if current_user.is_patient():
-        reports = participant_reports_query(current_user.id).all()
+        reports = participant_reports_query(current_user.id).all() if _participant_reports_on() else []
     elif current_user.is_provider():
         reports = Report.query.join(ChatWindow).filter(
             Report.provider_id == current_user.id,
@@ -54,8 +75,8 @@ def get_report(report_id):
     report = db.get_or_404(Report, report_id)
 
     # Access control
-    if current_user.is_patient() and report.patient_id != current_user.id:
-        abort(403)
+    if current_user.is_patient() and not _participant_may_read(report):
+        abort(404)
     elif current_user.is_provider() and report.provider_id != current_user.id:
         abort(403)
 
@@ -87,9 +108,12 @@ def get_window_report(window_id):
     """Get report for a specific window"""
     window = db.get_or_404(ChatWindow, window_id)
 
-    # Access control
-    if current_user.is_patient() and window.patient_id != current_user.id:
-        abort(403)
+    # Access control. A participant gets their summary report only.
+    if current_user.is_patient():
+        report = _participant_window_report(window)
+        if report is None:
+            abort(404)
+        return jsonify(report.to_dict())
     elif current_user.is_provider() and window.provider_id != current_user.id:
         abort(403)
 
@@ -156,8 +180,8 @@ def get_report_html(report_id):
     report = db.get_or_404(Report, report_id)
 
     # Access control
-    if current_user.is_patient() and report.patient_id != current_user.id:
-        abort(403)
+    if current_user.is_patient() and not _participant_may_read(report):
+        abort(404)
     elif current_user.is_provider() and report.provider_id != current_user.id:
         abort(403)
 
@@ -246,8 +270,8 @@ def download_report(report_id, format):
     report = db.get_or_404(Report, report_id)
 
     # Access control
-    if current_user.is_patient() and report.patient_id != current_user.id:
-        abort(403)
+    if current_user.is_patient() and not _participant_may_read(report):
+        abort(404)
     elif current_user.is_provider() and report.provider_id != current_user.id:
         abort(403)
 
@@ -260,14 +284,17 @@ def download_window_report(window_id, report_type, format):
     """Download report by window ID and report type (summary or detailed)."""
     window = db.get_or_404(ChatWindow, window_id)
 
-    # Access control
-    if current_user.is_patient() and window.patient_id != current_user.id:
-        abort(403)
-    elif current_user.is_provider() and window.provider_id != current_user.id:
-        abort(403)
-
     if report_type not in ('summary', 'detailed'):
         abort(400, "report_type must be 'summary' or 'detailed'")
+
+    # Access control. A participant gets their summary report only.
+    if current_user.is_patient():
+        report = _participant_window_report(window) if report_type == 'summary' else None
+        if report is None:
+            abort(404)
+        return _send_report_download(report, format)
+    elif current_user.is_provider() and window.provider_id != current_user.id:
+        abort(403)
 
     report = Report.query.filter_by(window_id=window_id, report_type=report_type).first()
     if not report:
@@ -336,13 +363,15 @@ def _send_report_download(report, format):
 @reports_bp.route("/live/<int:window_id>", methods=["GET"])
 @login_required
 def get_live_report(window_id):
-    """Generate and return a live report without saving to database"""
+    """Generate and return a live report without saving to database. For the
+    research team only: it builds the whole report, model calls included, on
+    every request."""
+    if not current_user.is_provider() and not current_user.is_admin():
+        abort(403)
     window = db.get_or_404(ChatWindow, window_id)
 
     # Access control
-    if current_user.is_patient() and window.patient_id != current_user.id:
-        abort(403)
-    elif current_user.is_provider() and window.provider_id != current_user.id:
+    if current_user.is_provider() and window.provider_id != current_user.id:
         abort(403)
 
     if not get_effective_setting('enable_nlp_report', window.provider_id, True):

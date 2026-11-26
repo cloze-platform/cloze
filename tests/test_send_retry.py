@@ -1,8 +1,9 @@
 """Sending that can't lose or duplicate a message (the new participant page).
 
-The page sends a client_message_id with each message. A failed reply saves
-nothing and returns 502 so the page can offer Try again; a repeat of the same
-id returns the saved reply. Without an id (today's page), nothing changes.
+The page sends a client_message_id with each message. The message is saved
+before the model is called; a failed reply returns 502 and Try again completes
+that message; a repeat of a finished one returns the saved reply. Without an
+id (today's page), nothing changes.
 """
 
 import json
@@ -11,7 +12,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from llm_chat.models import Conversation, EscalationEvent, Message, ProviderFeatureFlags
-from llm_chat.services.llm_interface import LLMInterface
+from llm_chat.services.llm_interface import LLMCallError, LLMInterface
 
 ID = "0b6f1c2e-5a1d-4c55-9a43-7a1e1f0c9d21"
 
@@ -22,12 +23,17 @@ def ai(monkeypatch):
     the way a real provider error does (inside call_llm's own handling)."""
     class AI:
         fail = False
+        block = False
         calls = 0
+        histories = []
 
     real = LLMInterface.call_llm.__func__
 
     def call(cls, model, history, system_prompt=None, config_override=None, raise_on_error=False):
         AI.calls += 1
+        AI.histories.append(history)
+        if AI.block and raise_on_error:
+            raise LLMCallError("I wasn't able to generate a response to that.", retryable=False)
         if AI.fail:
             monkeypatch.setattr(LLMInterface, "_provider_clients", {})
             model.provider, model.api_endpoint = "openai", None
@@ -50,16 +56,65 @@ def _count(conv):
     return Message.query.filter_by(conversation_id=conv.id).count()
 
 
-def test_a_failed_reply_saves_nothing_and_says_so(study, login_as, ai, db):
+def test_a_failed_reply_keeps_the_message_and_says_so(study, login_as, ai, db):
     ai.fail = True
     conv = study["thoughts_conv"]
     before, title = _count(conv), conv.title
-    resp = _send(login_as(study["patient"]), conv)
+    resp = _send(login_as(study["patient"]), conv, "Something I needed to say")
     assert resp.status_code == 502
     body = resp.get_json()
-    assert body["reply_failed"] is True and body["retry"] is True and body["error"].startswith("Something went wrong")
+    assert body["reply_failed"] is True and body["retry"] is True and body["saved"] is True
     db.session.expire_all()
-    assert _count(conv) == before and db.session.get(Conversation, conv.id).title == title
+    kept = db.session.get(Message, body["user_message_id"])
+    assert (kept.content, kept.client_message_id) == ("Something I needed to say", ID)
+    assert _count(conv) == before + 1 and db.session.get(Conversation, conv.id).title == title
+
+
+def test_try_again_completes_the_saved_message_without_using_another_turn(study, login_as, ai, db):
+    db.session.add(ProviderFeatureFlags(provider_id=study["provider"].id, max_turns_per_conversation=4))
+    db.session.commit()
+    conv, client = study["thoughts_conv"], login_as(study["patient"])          # 2 turns used
+    ai.fail = True
+    assert _send(client, conv).status_code == 502
+    ai.fail = False
+    body = _send(client, conv).get_json()
+    assert body["turns_remaining"] == 1 and ai.histories[-1][-1]["content"] == "hello"
+    assert [m["content"] for m in ai.histories[-1]].count("hello") == 1
+
+
+def test_a_blocked_reply_points_to_crisis_help(study, login_as, ai):
+    ai.block = True
+    resp = _send(login_as(study["patient"]), study["thoughts_conv"], "something the filter blocks")
+    assert resp.status_code == 200
+    assert "988" in resp.get_json()["response"] and "Get help now" in resp.get_json()["response"]
+
+
+def test_a_message_left_without_a_reply_is_joined_to_the_next(study, login_as, ai):
+    conv, client = study["thoughts_conv"], login_as(study["patient"])
+    ai.fail = True
+    _send(client, conv, "first thought", "first-message-id")
+    ai.fail = False
+    _send(client, conv, "second thought", "second-message-id")
+    assert ai.histories[-1][-1] == {"role": "user", "content": "first thought\n\nsecond thought"}
+
+
+def test_too_long_is_refused(study, login_as, ai):
+    resp = _send(login_as(study["patient"]), study["thoughts_conv"], "x" * 10_001)
+    assert resp.status_code == 400 and ai.calls == 0
+
+
+def test_two_sends_of_one_message_at_once(study, login_as, ai, db, monkeypatch):
+    """The other request saved the message first: this one is told it's in progress."""
+    from llm_chat.services import guard
+    conv = study["thoughts_conv"]
+
+    def other_request_saves_it(*args, **kwargs):
+        db.session.add(Message(conversation_id=conv.id, role="user", content="hello", timestamp=1,
+                               client_message_id=ID))
+        db.session.commit()
+    monkeypatch.setattr(guard, "scan_and_escalate", other_request_saves_it)
+    resp = _send(login_as(study["patient"]), conv)
+    assert resp.status_code == 409 and resp.get_json()["in_progress"] is True and ai.calls == 0
 
 
 def test_todays_page_still_gets_the_failure_as_a_reply(study, login_as, ai):
@@ -167,3 +222,53 @@ def test_todays_page_alerts_as_before(study, login_as, ai, guard):
     _send(client, conv, "hopeless", client_id=None)
     _send(client, conv, "hopeless", client_id=None)
     assert EscalationEvent.query.count() == 2
+
+
+def test_reusing_an_id_with_different_text_is_refused_but_scanned(study, login_as, ai, guard):
+    conv, client = study["thoughts_conv"], login_as(study["patient"])
+    ai.fail = True
+    _send(client, conv, "I feel hopeless")
+    assert _send(client, conv, "Totally hopeless now").status_code == 409     # a hand-made client
+    assert EscalationEvent.query.count() == 2
+
+
+def test_the_guard_scans_messages_that_are_refused(study, login_as, ai, guard, db):
+    from llm_chat.services.conversation_end import end
+    end(study["thoughts_conv"], Conversation.TURN_LIMIT)
+    db.session.commit()
+    resp = _send(login_as(study["patient"]), study["thoughts_conv"], "I feel hopeless")
+    assert resp.status_code == 403 and EscalationEvent.query.count() == 1
+
+
+def test_a_guard_failure_never_blocks_the_message(study, login_as, ai, db, monkeypatch):
+    db.session.add(ProviderFeatureFlags(provider_id=study["provider"].id, guard_enabled=True,
+                                        guard_keywords=json.dumps(["hopeless"])))
+    db.session.commit()
+    from llm_chat.services import guard
+
+    def broken_insert(*args, **kwargs):
+        db.session.add(EscalationEvent(event_type="keyword_match", severity="critical", patient_id=None,
+                                       description="x"))
+        db.session.flush()                                   # NOT NULL patient_id: fails
+    monkeypatch.setattr(guard, "scan_and_escalate", broken_insert)
+    assert _send(login_as(study["patient"]), study["thoughts_conv"], "I feel hopeless").status_code == 200
+
+
+# ── Only the conversation's own user sends in it ──
+
+@pytest.mark.parametrize("who", ["provider", "admin"])
+def test_nobody_else_can_send_as_the_participant(study, login_as, ai, make_user, who):
+    sender = study["provider"] if who == "provider" else make_user("admin1", role="admin")
+    conv = study["thoughts_conv"]
+    before = _count(conv)
+    resp = login_as(sender).post(f"/api/conversation/{conv.id}/message",
+                                 json={"message": "words in their name"})
+    assert resp.status_code == 403 and _count(conv) == before and ai.calls == 0
+
+
+def test_researchers_can_still_send_in_their_own_conversations(study, login_as, ai, db):
+    own = Conversation(user_id=study["provider"].id, model_id=study["model"].id, title="Trying it out")
+    db.session.add(own)
+    db.session.commit()
+    resp = login_as(study["provider"]).post(f"/api/conversation/{own.id}/message", json={"message": "hello"})
+    assert resp.status_code == 200

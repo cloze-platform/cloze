@@ -37,6 +37,10 @@ class ChatWindow(db.Model):
     templates = db.relationship('ChatTemplate', backref='window', lazy='dynamic', cascade='all, delete-orphan')
     conversations = db.relationship('Conversation', backref='chat_window', lazy='dynamic')
 
+    # compute_status values. A closed window has ended, its report made or not.
+    OPEN, UPCOMING = 'active', 'scheduled'
+    CLOSED_STATUSES = ('generating_report', 'report_ready')
+
     def is_current(self):
         """Check if this window is currently active based on date"""
         return self.compute_status() == 'active'
@@ -51,7 +55,7 @@ class ChatWindow(db.Model):
         now = now or time.time()
 
         # Terminal states: these persist regardless of time
-        if self.status in ('generating_report', 'report_ready'):
+        if self.status in self.CLOSED_STATUSES:
             return self.status
 
         if now < self.start_date:

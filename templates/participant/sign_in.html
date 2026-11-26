@@ -1,8 +1,9 @@
 {% extends "participant/base.html" %}
 {# Sign in (participant_ui = v2). Everyone signs in here, researchers too;
    the server sends each account to its own dashboard, so there's no role to
-   pick. Signing in goes through /api/login, which answers 401 (no match),
-   423 (account locked for a while), or 429 (too many tries from this network). #}
+   pick. Signing in goes through /api/login, which answers 401 (no match, or
+   an account locked for a while: the two look the same on purpose) or 429
+   (too many tries from this network). #}
 
 {% block title %}Sign in · Cloze{% endblock %}
 {% block menu %}{% endblock %}
@@ -74,10 +75,9 @@
 
   function say(kind, title, detail) {
     error.innerHTML = "";
-    error.className = "flex flex-col gap-1 rounded-2xl px-4 py-3 " +
-      (kind === "locked" ? "bg-p-waiting-soft text-p-ink-2" : "bg-p-help-soft text-p-ink-2");
+    error.className = "flex flex-col gap-1 rounded-2xl bg-p-help-soft px-4 py-3 text-p-ink-2";
     var strong = document.createElement("strong");
-    strong.className = "text-[15px] font-semibold " + (kind === "locked" ? "text-p-waiting" : "text-p-help");
+    strong.className = "text-[15px] font-semibold text-p-help";
     strong.textContent = title;
     error.appendChild(strong);
     if (detail) {
@@ -107,15 +107,12 @@
         window.location.assign(data.redirect);
         return;
       }
-      if (response.status === 423) {
-        var mins = data.retry_after_minutes || 15;
-        say("locked", "Your account is locked for now",
-            "There were too many tries with the wrong password. Try again in " + mins +
-            (mins === 1 ? " minute" : " minutes") + ", or ask your study team to help.");
-      } else if (response.status === 429) {
+      if (response.status === 429) {
         say("error", "Too many sign-in attempts", "Please wait a minute, then try again.");
       } else {
-        say("error", "That username and password don't match", "Check them and try again. Passwords are case-sensitive.");
+        say("error", "That username and password don't match",
+            "Check them and try again. Passwords are case-sensitive. After several wrong tries, " +
+            "signing in pauses for 15 minutes; your study team can help.");
         password.value = "";
         password.focus();
       }

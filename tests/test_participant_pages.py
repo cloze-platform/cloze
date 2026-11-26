@@ -9,12 +9,6 @@ from llm_chat.models import AdminSettings, ProviderFeatureFlags, SafetyPlan
 PAGES = ["/help", "/exercises", "/notebook", "/safety-plan", "/reports"]
 
 
-@pytest.fixture
-def v2(db):
-    db.session.add(AdminSettings(setting_name="participant_ui", setting_value="v2"))
-    db.session.commit()
-
-
 def _approve_plan(db, study, **sections):
     plan = SafetyPlan(patient_id=study["patient"].id, status="active")
     for name, value in sections.items():
@@ -223,7 +217,7 @@ def test_home_leads_with_the_safety_plan_step(study, login_as, v2, db, statuses,
         db.session.add(SafetyPlan(patient_id=study["patient"].id, status=status))
     db.session.commit()
     home = _home(login_as(study["patient"]))
-    assert f'<h1 id="step-heading"' in home and heading in home
+    assert '<h1 id="step-heading"' in home and heading in home
     assert (link in home) if link else ("Continue my safety plan" not in home)
     assert "These open once your care team approves your safety plan." in home
     assert f'/exercise/template/{study["checkin"].id}"' not in home         # locked
@@ -289,3 +283,43 @@ def test_home_says_nothing_about_reports_when_they_are_off(study, login_as, v2, 
 def test_home_for_a_participant_with_nothing_yet(make_user, login_as, v2):
     home = _home(login_as(make_user("new")))
     assert "Nothing to do yet" in home and "data-help-open" in home
+
+
+# ── Crisis lines on error pages, hidden chats ──
+
+@pytest.mark.parametrize("path", ["/no-such-page", "/exercise/99999"])
+def test_error_pages_keep_the_crisis_lines(study, login_as, v2, path):
+    resp = login_as(study["patient"]).get(path)
+    assert resp.status_code == 404 and 'href="tel:988"' in resp.get_data(as_text=True)
+
+
+def test_hidden_templates_and_windows_cannot_be_started(study, login_as, db):
+    from llm_chat.models import ChatTemplate
+    _approve_plan(db, study)
+    hidden = ChatTemplate.query.filter_by(title="Hidden chat").one()
+    assert login_as(study["patient"]).post("/api/windows/start_conversation",
+                                           json={"template_id": hidden.id}).status_code == 404
+
+
+# ── Get help now can't be taken down ──
+
+def test_help_survives_plan_data_of_the_wrong_shape(study, login_as, v2, db):
+    plan = _approve_plan(db, study)
+    plan.care_team = '{"not": "a list"}'
+    plan.coping_strategies = '[1, "two", {"strategy": 3}, {"strategy": "Walk", "patient_language": 4}]'
+    db.session.commit()
+    for path in ("/help", "/dashboard"):
+        html = _html(login_as(study["patient"]), path)
+        assert 'href="tel:988"' in html
+    assert "Walk" in _html(login_as(study["patient"]), "/help")
+
+
+def test_help_shows_the_crisis_lines_even_if_the_menu_fails(study, login_as, v2, monkeypatch):
+    from llm_chat.services import participant_nav
+
+    def broken(user, now=None):
+        raise RuntimeError("menu data failed")
+    monkeypatch.setattr(participant_nav, "build", broken)
+    resp = login_as(study["patient"]).get("/help")
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 200 and 'href="tel:988"' in html and '<nav aria-label="Study"' not in html

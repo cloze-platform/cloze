@@ -51,6 +51,17 @@
 
     .link:hover { color: var(--brand-hover); }
 
+    /* Error pages can be what a participant in crisis lands on: keep the lines in view. */
+    .crisis {
+      margin-top: 2.5rem;
+      max-width: 22rem;
+      margin-left: auto;
+      margin-right: auto;
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+    .crisis a { color: #A3213D; font-weight: 600; }
+
     .logo {
       width: 96px;
       height: 96px;
@@ -63,6 +74,7 @@
       .message { color: #a8a29e; }
       .link { color: var(--brand-on-dark); }
       .link:hover { color: var(--brand-on-dark-hover); }
+      .crisis a { color: #FF9DB0; }
       .logo { content: url('/static/images/logo-dark.svg'); }
     }
   </style>
@@ -73,6 +85,7 @@
     <div class="code">404</div>
     <p class="message">This page doesn't exist.</p>
     <a href="/" class="link">← Back to Cloze</a>
+    <p class="crisis">If you're in crisis and need help right away, call or text <a href="tel:988">988</a>, or call <a href="tel:911">911</a>.</p>
   </div>
 </body>
 </html>

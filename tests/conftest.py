@@ -13,9 +13,26 @@ import time
 
 import pytest
 
+from functools import partial
+
+from werkzeug.security import generate_password_hash
+
+import llm_chat.models.core as _core
 from llm_chat import create_app
 from llm_chat.extensions import db as _db
 from llm_chat.models.core import User
+from llm_chat.services.llm_interface import LLMInterface
+from llm_chat.services.report_scheduler import report_scheduler
+
+# Every test builds a fresh app, so setup cost multiplies. In tests only:
+# - no report scheduler thread (it queries whichever app it last saw, before
+#   that test's tables exist);
+# - no LLM provider clients (no test calls a real provider; tests that need
+#   them set LLMInterface._provider_clients themselves);
+# - a cheap password hash (hashes still verify, they're just not slow).
+report_scheduler.start = lambda *args, **kwargs: None
+LLMInterface.initialize_clients = classmethod(lambda cls, config: None)
+_core.generate_password_hash = partial(generate_password_hash, method="pbkdf2:sha256:1")
 
 
 @pytest.fixture
@@ -88,6 +105,14 @@ def login_as(app):
             sess["_fresh"] = True
         return c
     return _login
+
+
+@pytest.fixture
+def v2(db):
+    """The redesigned participant pages switched on (participant_ui = v2)."""
+    from llm_chat.models import AdminSettings
+    db.session.add(AdminSettings(setting_name="participant_ui", setting_value="v2"))
+    db.session.commit()
 
 
 # ── A seeded participant study (participant_nav and the participant pages) ──

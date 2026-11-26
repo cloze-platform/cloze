@@ -1,16 +1,8 @@
 """The Safety plan page: each state, what it shows, and the save-for-later flag."""
 
-import json
-
 import pytest
 
-from llm_chat.models import AdminSettings, ProviderFeatureFlags, SafetyPlan
-
-
-@pytest.fixture
-def v2(db):
-    db.session.add(AdminSettings(setting_name="participant_ui", setting_value="v2"))
-    db.session.commit()
+from llm_chat.models import ProviderFeatureFlags, SafetyPlan
 
 
 def _plan(db, study, status, **sections):
@@ -132,3 +124,36 @@ def test_todays_page_sends_as_before(study, login_as, db):
     _plan(db, study, "draft")
     resp = login_as(study["patient"]).put("/api/safety-plan/patient-sections", json=FULL)
     assert resp.get_json()["status"] == "pending_review"
+
+
+# ── What the plan accepts ──
+
+@pytest.mark.parametrize("body", [
+    {"warning_signs": 1},
+    {"coping_strategies": ["walk"]},
+    {"support_network": [{"person": "Sam", "comfort_level": 9}]},
+    {"support_network": [{"person": "Sam", "comfort_level": True}]},
+    {"reasons_for_living": [{"reason": "x" * 501}]},
+    {"warning_signs": [{"sign": "x"}] * 51},
+    {"warning_signs": [{"sign": ["not", "text"]}]},
+])
+def test_bad_sections_are_refused(study, login_as, db, body):
+    _plan(db, study, "draft")
+    resp = login_as(study["patient"]).put("/api/safety-plan/patient-sections", json=body)
+    assert resp.status_code == 400
+
+
+def test_sections_are_cleaned(study, login_as, db):
+    plan = _plan(db, study, "draft")
+    resp = login_as(study["patient"]).put("/api/safety-plan/patient-sections", json={
+        "warning_signs": [{"sign": "  Not sleeping ", "extra": "<b>dropped</b>"}, {"sign": ""}],
+        "submit": False})
+    assert resp.status_code == 200
+    assert db.session.get(SafetyPlan, plan.id).get_warning_signs() == [
+        {"sign": "Not sleeping", "context": "", "severity": 3}]
+
+
+@pytest.mark.parametrize("body", [{"pattern": ""}, {"pattern": 5}, {"pattern": "x" * 501}, {"pattern": "ok", "reason": 7}])
+def test_bad_things_to_avoid_are_refused(study, login_as, db, body):
+    _plan(db, study, "draft")
+    assert login_as(study["patient"]).post("/api/safety-plan/anti-pattern", json=body).status_code == 400

@@ -22,9 +22,6 @@ from sqlalchemy.orm.attributes import set_committed_value
 from ..extensions import db
 from ..models import ChatWindow, Conversation
 
-CLOSED_STATUSES = ("generating_report", "report_ready")
-
-
 def end(conversation, reason, at=None):
     """Record that the conversation ended, unless it already has. Returns
     True if this call ended it. Doesn't commit."""
@@ -51,7 +48,7 @@ def end(conversation, reason, at=None):
 
 
 def window_has_ended(window, now=None):
-    return window is not None and window.compute_status(now) in CLOSED_STATUSES
+    return window is not None and window.compute_status(now) in ChatWindow.CLOSED_STATUSES
 
 
 def stamp_window_closed(conversation, window, now=None):
@@ -71,7 +68,7 @@ def backfill_window_closed(now=None):
     rows = (db.session.query(Conversation, ChatWindow)
             .join(ChatWindow, Conversation.window_id == ChatWindow.id)
             .filter(Conversation.ended_at.is_(None),
-                    or_(ChatWindow.end_date < now, ChatWindow.status.in_(CLOSED_STATUSES)))
+                    or_(ChatWindow.end_date < now, ChatWindow.status.in_(ChatWindow.CLOSED_STATUSES)))
             .all())
     marked = sum(1 for conversation, window in rows if stamp_window_closed(conversation, window, now))
     db.session.commit()

@@ -1,7 +1,9 @@
+import secrets
 import time
 from collections import defaultdict
 from flask import Blueprint, render_template, jsonify, redirect, url_for, request
 from flask_login import login_user, logout_user, login_required, current_user
+from werkzeug.security import check_password_hash, generate_password_hash
 from ..models.core import User
 from ..extensions import db
 from flask_smorest import Blueprint as SmorestBlueprint
@@ -27,6 +29,10 @@ def _is_rate_limited(ip):
 
 def _record_failure(ip):
     _login_attempts[ip].append(time.time())
+
+
+# Checked against for unknown usernames, so they cost what a real account does.
+_UNKNOWN_USER_HASH = generate_password_hash(secrets.token_hex(16))
 
 auth_bp = Blueprint("auth1", __name__)
 auth_blp = SmorestBlueprint(name = "auth", import_name = "auth", description = "Authentication endpoints")
@@ -82,31 +88,31 @@ def api_login():
         return jsonify({'status': 'error', 'message': 'Too many login attempts. Please wait a minute.'}), 429
 
     data = request.json or {}
+    password = data.get('password', '')
+    if not isinstance(password, str):
+        password = ''
     user = User.query.filter_by(username=data.get('username')).first()
 
-    if user:
-        # Account lockout check
-        if user.is_locked:
-            _record_failure(ip)
-            remaining = int(user.locked_until - time.time())
-            mins = max(1, remaining // 60)
-            return jsonify({'status': 'error', 'message': f'Account temporarily locked. Try again in {mins} minute(s).',
-                            'retry_after_minutes': mins}), 423
-
-        if user.check_password(data.get('password', '')):
-            user.record_successful_login()
-            db.session.commit()
-            login_user(user)
-            return jsonify({
-                'status': 'success',
-                'role': user.role,
-                'redirect': url_for('admin.admin_dashboard' if user.is_admin()
-                                    else 'provider.provider_dashboard' if user.is_provider()
-                                    else 'conversations.user_dashboard')
-            })
-        else:
-            user.record_failed_login()
-            db.session.commit()
+    # Every refusal looks the same: an unknown username, a wrong password, and
+    # a locked account (even with the right password). A different answer for
+    # locked accounts would show which usernames exist, and answering
+    # differently for the right password would tell a guesser they'd found it.
+    if user is None:
+        check_password_hash(_UNKNOWN_USER_HASH, password)   # the same work, so timing doesn't tell
+    elif user.check_password(password) and not user.is_locked:
+        user.record_successful_login()
+        db.session.commit()
+        login_user(user)
+        return jsonify({
+            'status': 'success',
+            'role': user.role,
+            'redirect': url_for('admin.admin_dashboard' if user.is_admin()
+                                else 'provider.provider_dashboard' if user.is_provider()
+                                else 'conversations.user_dashboard')
+        })
+    elif not user.is_locked:
+        user.record_failed_login()
+        db.session.commit()
 
     _record_failure(ip)
     return jsonify({'status': 'error', 'message': 'Invalid credentials'}), 401

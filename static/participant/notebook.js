@@ -1,19 +1,8 @@
 // The Notebook page: add, edit or clear the note on a saved line
 // (PUT /api/selections/<id>), and remove a line (DELETE /api/selections/<id>).
 (function () {
-  var announcer = document.getElementById("announcer");
-
   function request(method, id, body) {
-    return fetch("/api/selections/" + id, {
-      method: method,
-      headers: { "Content-Type": "application/json" },
-      body: body ? JSON.stringify(body) : undefined,
-    }).then(function (response) {
-      return response.json().catch(function () { return {}; }).then(function (data) {
-        if (!response.ok) throw new Error(data.error || "That didn't save. Please try again.");
-        return data;
-      });
-    });
+    return Cloze.api(method, "/api/selections/" + id, body);
   }
 
   function parts(line) {
@@ -44,14 +33,17 @@
     var p = parts(line);
     if (event.target.closest("[data-note-edit]")) showForm(p, true);
     if (event.target.closest("[data-note-cancel]")) { showForm(p, false); p.edit.focus(); }
-    if (event.target.closest("[data-remove]")) {
+    var remove = event.target.closest("[data-remove]");
+    if (remove) {
       if (!window.confirm("Remove this line from your notebook?")) return;
+      remove.disabled = true;
       request("DELETE", p.id).then(function () {
         var section = line.closest("section");
         line.remove();
-        announcer.textContent = "Removed from your notebook.";
+        Cloze.announce("Removed from your notebook.");
         if (!section.querySelector("[data-line]")) section.remove();
       }).catch(function (e) {
+        remove.disabled = false;
         p.error.textContent = e.message;
         p.error.classList.remove("hidden");
       });
@@ -64,16 +56,21 @@
     event.preventDefault();
     var line = form.closest("[data-line]");
     var p = parts(line);
+    var save = form.querySelector("button[type=submit]");
+    if (save.disabled) return;
+    save.disabled = true;
     p.error.classList.add("hidden");
     request("PUT", p.id, { note: p.input.value }).then(function (data) {
+      save.disabled = false;
       var note = data.own_note || "";
       p.text.textContent = note;
       p.view.classList.toggle("hidden", !note);
       p.edit.textContent = note ? "Edit note" : "Add a note";
       showForm(p, false);
       p.edit.focus();
-      announcer.textContent = note ? "Note saved." : "Note removed.";
+      Cloze.announce(note ? "Note saved." : "Note removed.");
     }).catch(function (e) {
+      save.disabled = false;
       p.error.textContent = e.message;
       p.error.classList.remove("hidden");
     });

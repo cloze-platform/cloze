@@ -6,7 +6,8 @@
      panel    an optional side panel beside the page
      tabs     the phone's bottom tabs (participant/_tabs.html)
    Pages rendered without a menu (sign in, closed hours) empty menu and tabs.
-   Menu pages need nav and current (see routes/participant.py render_page).
+   Menu pages need nav and current (see routes/participant.py render_page);
+   without nav (the help page's fallback) the menu and tabs are left out.
 #}
 <!DOCTYPE html>
 <html lang="en">
@@ -29,12 +30,12 @@
   <div id="announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <div class="flex min-h-screen flex-col lg:flex-row">
-    {% block menu %}{% include "participant/_menu.html" %}{% endblock %}
+    {% block menu %}{% if nav %}{% include "participant/_menu.html" %}{% endif %}{% endblock %}
     <main id="main" tabindex="-1" class="min-w-0 flex-1 focus:outline-none">
       {% block content %}{% endblock %}
     </main>
     {% block panel %}{% endblock %}
-    {% block tabs %}{% include "participant/_tabs.html" %}{% endblock %}
+    {% block tabs %}{% if nav %}{% include "participant/_tabs.html" %}{% endif %}{% endblock %}
   </div>
 
   {% block help_dialog %}
@@ -53,6 +54,7 @@
   <script src="{{ url_for('static', filename='participant/help.js') }}" defer></script>
   {% endblock %}
 
+  <script src="{{ url_for('static', filename='participant/common.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

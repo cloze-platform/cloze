@@ -38,6 +38,12 @@ class User(UserMixin, db.Model):
         return False
 
     def record_failed_login(self):
+        # A lock that has run out starts the count again. Otherwise one wrong
+        # password after each lock ended would lock the account again, and
+        # someone who knew the username could keep its owner out for good.
+        if self.locked_until and self.locked_until <= time.time():
+            self.failed_login_attempts = 0
+            self.locked_until = None
         self.failed_login_attempts = (self.failed_login_attempts or 0) + 1
         # Lock after 5 consecutive failures: 15 min lockout
         if self.failed_login_attempts >= 5:
