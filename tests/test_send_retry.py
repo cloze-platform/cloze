@@ -252,3 +252,23 @@ def test_a_guard_failure_never_blocks_the_message(study, login_as, ai, db, monke
         db.session.flush()                                   # NOT NULL patient_id: fails
     monkeypatch.setattr(guard, "scan_and_escalate", broken_insert)
     assert _send(login_as(study["patient"]), study["thoughts_conv"], "I feel hopeless").status_code == 200
+
+
+# ── Only the conversation's own user sends in it ──
+
+@pytest.mark.parametrize("who", ["provider", "admin"])
+def test_nobody_else_can_send_as_the_participant(study, login_as, ai, make_user, who):
+    sender = study["provider"] if who == "provider" else make_user("admin1", role="admin")
+    conv = study["thoughts_conv"]
+    before = _count(conv)
+    resp = login_as(sender).post(f"/api/conversation/{conv.id}/message",
+                                 json={"message": "words in their name"})
+    assert resp.status_code == 403 and _count(conv) == before and ai.calls == 0
+
+
+def test_researchers_can_still_send_in_their_own_conversations(study, login_as, ai, db):
+    own = Conversation(user_id=study["provider"].id, model_id=study["model"].id, title="Trying it out")
+    db.session.add(own)
+    db.session.commit()
+    resp = login_as(study["provider"]).post(f"/api/conversation/{own.id}/message", json={"message": "hello"})
+    assert resp.status_code == 200

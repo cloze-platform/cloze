@@ -290,8 +290,10 @@ def send_message(conversation_id):
     """
     conversation = db.get_or_404(Conversation, conversation_id)
 
-    # Access check
-    if conversation.user_id != current_user.id and not current_user.can_access_patient(conversation.user_id):
+    # Only the conversation's own user sends in it. Researchers and admins can
+    # read a participant's conversation, but a message they sent would be saved
+    # as the participant's words.
+    if conversation.user_id != current_user.id:
         abort(403)
 
     # Participant chats must come from a chat window: only that path stores the
