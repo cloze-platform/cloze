@@ -80,6 +80,13 @@
     <div id="flowList" class="flex lg:flex-col gap-1 lg:gap-0.5 overflow-x-auto lg:overflow-visible">
       <div class="py-8 text-center text-xs text-stone-300">Loading...</div>
     </div>
+    <div class="mt-6 mb-2 flex items-center justify-between">
+      <h3 class="text-[11px] font-medium uppercase tracking-wider text-stone-300">Speakers</h3>
+      <button onclick="newSpeaker()" class="add-trigger p-0.5" title="New speaker" aria-label="New speaker">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
+    <div id="speakerList" class="flex lg:flex-col gap-1 lg:gap-0.5 overflow-x-auto lg:overflow-visible"></div>
   </div>
 
   {# ── Main workspace — document surface ── #}
@@ -184,6 +191,25 @@
       </div>
     </div>
 
+    {# Speaker editor #}
+    <div id="speakerWorkspace" class="hidden pt-2">
+      <h2 id="speakerHeading" class="text-2xl font-bold text-stone-900">New speaker</h2>
+      <p class="mt-1 text-sm text-stone-400">In a chat whose cast includes this speaker, reply lines that start with the speaker's name and a colon (for example "Sky:") show under this name and picture. Give a chat its cast in the chat's settings.</p>
+      <div class="mt-6 max-w-md space-y-4">
+        <label class="block"><span class="text-[11px] text-stone-300">Name</span>
+          <input id="speakerName" type="text" maxlength="40" class="inline-input text-sm font-medium text-stone-900 py-1" placeholder="As the prompt writes it, for example Sky"></label>
+        <label class="block"><span class="text-[11px] text-stone-300">Role</span>
+          <input id="speakerRole" type="text" maxlength="60" class="inline-input text-sm text-stone-700 py-1" placeholder="For example: Practice student"></label>
+        <label class="block"><span class="text-[11px] text-stone-300">Picture</span>
+          <select id="speakerPicture" class="inline-input text-sm text-stone-700 py-1 cursor-pointer"></select></label>
+        <div class="flex items-center gap-3 pt-1">
+          <button onclick="saveSpeaker()" class="text-sm font-medium text-cloze-indigo hover:text-cloze-hover transition-colors">Save</button>
+          <span id="speakerStatus" class="text-xs text-stone-400" role="status"></span>
+          <button id="speakerDelete" onclick="deleteSpeaker()" class="ml-auto text-xs text-stone-300 hover:text-red-400 transition-colors">Remove speaker</button>
+        </div>
+      </div>
+    </div>
+
     {# Enrollment panel #}
     <div id="enrollPanel" class="hidden pt-2">
       <div class="mb-6">
@@ -208,6 +234,8 @@
   var models = [];
   var systemPrompts = [];
   var mediaAssets = [];
+  var speakers = [];
+  var currentSpeaker = null;   // the speaker being edited; null for a new one
 
   // ── Init ──────────────────────────────────────────────────
 
@@ -218,13 +246,16 @@
       fetch('/api/models').then(r => r.json()),
       fetch('/api/system_prompts').then(r => r.json()),
       fetch('/api/provider/media').then(r => r.ok ? r.json() : { assets: [] }),
+      fetch('/api/provider/speakers').then(r => r.ok ? r.json() : { speakers: [] }),
     ]);
     flows = results[0];
     patients = results[1];
     models = results[2];
     systemPrompts = results[3];
     mediaAssets = results[4].assets || [];
+    speakers = results[5].speakers || [];
     renderFlowList();
+    renderSpeakerList();
   }
 
   // ── Flow list sidebar ─────────────────────────────────────
@@ -251,6 +282,7 @@
   // ── Flow selection ────────────────────────────────────────
 
   async function selectFlow(flowId) {
+    hideSpeakerWorkspace();
     var resp = await fetch('/api/provider/flows/' + flowId);
     currentFlow = await resp.json();
 
@@ -484,6 +516,7 @@
             renderGreetingImageOptions(chat.greeting_asset) +
           '</select></div>' +
         '</div>' +
+        renderCastFields(chat) +
         '<div class="flex items-center gap-3 pt-1">' +
           '<button onclick="saveChat(' + chat.id + ')" class="text-sm font-medium text-cloze-indigo hover:text-cloze-hover transition-colors">Save</button>' +
           '<span id="chat-save-status-' + chat.id + '" class="text-xs text-stone-400"></span>' +
@@ -515,6 +548,126 @@
     }).join('');
   }
 
+  // ── Speakers ──────────────────────────────────────────────
+
+  function speakerAvatar(sp) {
+    if (sp.picture) return '<img src="' + escapeHtml(sp.picture.thumb_url) + '" alt="" class="h-5 w-5 shrink-0 rounded-full object-cover">';
+    return '<span aria-hidden="true" class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-semibold text-violet-700">' + escapeHtml(sp.name.charAt(0).toUpperCase()) + '</span>';
+  }
+
+  function renderSpeakerList() {
+    var container = document.getElementById('speakerList');
+    if (!speakers.length) {
+      container.innerHTML = '<div class="py-2 text-xs text-stone-300">None yet</div>';
+      return;
+    }
+    container.innerHTML = speakers.map(function(sp) {
+      var active = currentSpeaker && currentSpeaker.id === sp.id && !document.getElementById('speakerWorkspace').classList.contains('hidden');
+      return '<button type="button" class="flow-item flex w-full items-center gap-2 text-left ' + (active ? 'active' : '') + '" onclick="editSpeaker(' + sp.id + ')">' +
+        speakerAvatar(sp) + '<span class="min-w-0"><span class="block truncate text-sm font-medium">' + escapeHtml(sp.name) + '</span>' +
+        (sp.role ? '<span class="block truncate text-[11px] text-stone-300">' + escapeHtml(sp.role) + '</span>' : '') + '</span></button>';
+    }).join('');
+  }
+
+  function hideSpeakerWorkspace() {
+    document.getElementById('speakerWorkspace').classList.add('hidden');
+  }
+
+  function showSpeakerWorkspace(sp) {
+    currentSpeaker = sp;
+    ['emptyState', 'flowTypePicker', 'enrollPanel', 'flowWorkspace'].forEach(function(id) {
+      document.getElementById(id).classList.add('hidden');
+    });
+    document.getElementById('speakerWorkspace').classList.remove('hidden');
+    document.getElementById('speakerHeading').textContent = sp ? sp.name : 'New speaker';
+    document.getElementById('speakerName').value = sp ? sp.name : '';
+    document.getElementById('speakerRole').value = sp ? (sp.role || '') : '';
+    var current = sp && sp.picture;
+    var options = mediaAssets.slice();
+    if (current && !options.some(function(a) { return a.id === current.id; })) options.push(current);
+    document.getElementById('speakerPicture').innerHTML = '<option value="">No picture (shows the first letter)</option>' +
+      options.map(function(a) {
+        return '<option value="' + escapeHtml(a.id) + '"' + (current && a.id === current.id ? ' selected' : '') + '>' + escapeHtml(a.label) + '</option>';
+      }).join('');
+    document.getElementById('speakerDelete').classList.toggle('hidden', !sp);
+    document.getElementById('speakerStatus').textContent = '';
+    currentFlow = null;
+    renderFlowList();
+    renderSpeakerList();
+    document.getElementById('speakerName').focus();
+  }
+
+  function newSpeaker() { showSpeakerWorkspace(null); }
+
+  function editSpeaker(id) {
+    showSpeakerWorkspace(speakers.find(function(sp) { return sp.id === id; }) || null);
+  }
+
+  async function saveSpeaker() {
+    var status = document.getElementById('speakerStatus');
+    var body = {
+      name: document.getElementById('speakerName').value,
+      role: document.getElementById('speakerRole').value,
+      picture_id: document.getElementById('speakerPicture').value || null
+    };
+    status.classList.remove('text-red-500');
+    status.textContent = 'Saving...';
+    var resp = await fetch(currentSpeaker ? '/api/provider/speakers/' + currentSpeaker.id : '/api/provider/speakers', {
+      method: currentSpeaker ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    var saved = await resp.json().catch(function() { return {}; });
+    if (!resp.ok) {
+      status.textContent = saved.error || 'Not saved. Please try again.';
+      status.classList.add('text-red-500');
+      return;
+    }
+    var i = speakers.findIndex(function(sp) { return sp.id === saved.id; });
+    if (i >= 0) speakers[i] = saved; else speakers.push(saved);
+    currentSpeaker = saved;
+    document.getElementById('speakerHeading').textContent = saved.name;
+    document.getElementById('speakerDelete').classList.remove('hidden');
+    status.textContent = 'Saved';
+    renderSpeakerList();
+  }
+
+  async function deleteSpeaker() {
+    if (!currentSpeaker) return;
+    var ok = await showDialog({ title: 'Remove ' + currentSpeaker.name, message: 'Chats with ' + currentSpeaker.name + ' in their cast will stop showing their lines under this name. Replies already written keep their text.', confirmText: 'Remove', danger: true });
+    if (!ok) return;
+    var resp = await fetch('/api/provider/speakers/' + currentSpeaker.id, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } });
+    if (!resp.ok) { showDialog({ title: 'Not removed', message: 'Please try again.', confirmText: 'OK' }); return; }
+    var gone = currentSpeaker.id;
+    speakers = speakers.filter(function(sp) { return sp.id !== gone; });
+    currentSpeaker = null;
+    hideSpeakerWorkspace();
+    document.getElementById('emptyState').classList.remove('hidden');
+    renderSpeakerList();
+  }
+
+  // A chat's cast (which speakers appear in it) and its main speaker.
+  function renderCastFields(chat) {
+    if (!speakers.length) {
+      return '<div><span class="text-[11px] text-stone-300">Cast</span>' +
+        '<p class="py-1 text-xs text-stone-400">To split replies by speaker, add speakers in the list on the left, then choose this chat\'s cast here.</p></div>';
+    }
+    var cast = chat.speaker_ids || [];
+    var boxes = speakers.map(function(sp) {
+      return '<label class="mr-4 inline-flex items-center gap-1.5 py-1 text-sm text-stone-700">' +
+        '<input type="checkbox" data-cast value="' + sp.id + '"' + (cast.indexOf(sp.id) >= 0 ? ' checked' : '') + '> ' + escapeHtml(sp.name) + '</label>';
+    }).join('');
+    var mains = '<option value="">None</option>' + speakers.map(function(sp) {
+      return '<option value="' + sp.id + '"' + (sp.id === chat.main_speaker_id ? ' selected' : '') + '>' + escapeHtml(sp.name) + '</option>';
+    }).join('');
+    return '<div class="grid grid-cols-2 gap-4">' +
+      '<div><span class="text-[11px] text-stone-300">Cast</span><div>' + boxes + '</div></div>' +
+      '<div><span class="text-[11px] text-stone-300">Main speaker</span>' +
+      '<select data-field="main_speaker_id" class="inline-input text-sm text-stone-700 py-1 cursor-pointer">' + mains + '</select></div>' +
+      '</div>' +
+      '<p class="text-xs text-stone-400">Reply lines that start with a cast member\'s name and a colon show under that speaker. Lines without a name continue the last speaker; text before any name goes to the main speaker. Chats with no cast show replies as they are.</p>';
+  }
+
   function toggleChatDetails(chatId) {
     var el = document.getElementById('chat-details-' + chatId);
     el.classList.toggle('open');
@@ -523,6 +676,7 @@
   // ── CRUD operations ───────────────────────────────────────
 
   function showNewFlowPicker() {
+    hideSpeakerWorkspace();
     document.getElementById('emptyState').classList.add('hidden');
     document.getElementById('flowWorkspace').classList.add('hidden');
     document.getElementById('enrollPanel').classList.add('hidden');
@@ -744,10 +898,18 @@
         payload[field] = val ? parseInt(val) : null;
       } else if (field === 'greeting_asset_id') {
         payload[field] = val || null;
+      } else if (field === 'main_speaker_id') {
+        payload[field] = val ? parseInt(val) : null;
       } else {
         payload[field] = val;
       }
     });
+
+    var castBoxes = form.querySelectorAll('[data-cast]');
+    if (castBoxes.length) {
+      payload.speaker_ids = Array.prototype.filter.call(castBoxes, function(b) { return b.checked; })
+        .map(function(b) { return parseInt(b.value); });
+    }
 
     var statusEl = document.getElementById('chat-save-status-' + chatId);
     statusEl.textContent = 'Saving...';
