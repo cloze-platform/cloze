@@ -26,6 +26,7 @@ import time
 from dataclasses import dataclass, field
 from functools import cached_property
 
+from flask import current_app
 from sqlalchemy import case, func
 
 from ..extensions import db
@@ -263,6 +264,17 @@ class Nav:
         return SafetyPlan.get_active_plan(self.user.id)
 
     @cached_property
+    def help_content(self):
+        """What Get help now adds to the crisis lines: the approved plan's care
+        team and first coping strategy, as plain text. Never raises: plan data
+        of the wrong shape is left out, so it can't take the help page down."""
+        try:
+            return help_content(self.active_plan)
+        except Exception:
+            current_app.logger.exception("Get help now: couldn't read the safety plan")
+            return {"care_team": [], "coping": None}
+
+    @cached_property
     def timezone(self):
         """The study's timezone, for dates on the participant's pages."""
         return get_effective_setting("access_hours_timezone", self.provider_id, "America/New_York")
@@ -371,6 +383,27 @@ def notebook_entries(user_id, limit=50):
     ids = {s.conversation_id for s in selections}
     titles = dict(db.session.query(Conversation.id, Conversation.title).filter(Conversation.id.in_(ids)).all()) if ids else {}
     return [(s, titles.get(s.conversation_id) or "An exercise") for s in selections]
+
+
+def help_content(plan):
+    """{"care_team": [{name, role, contact_protocol, after_hours}], "coping": str or None}
+    from a safety plan, keeping only entries of the expected shape."""
+    def text(value):
+        return value.strip() if isinstance(value, str) else ""
+
+    if plan is None:
+        return {"care_team": [], "coping": None}
+    team = plan.get_care_team()
+    team = team if isinstance(team, list) else []
+    care_team = [{key: text(m.get(key)) for key in ("name", "role", "contact_protocol", "after_hours")}
+                 for m in team if isinstance(m, dict) and text(m.get("name"))]
+    coping = None
+    strategies = plan.get_coping_strategies()
+    for item in strategies if isinstance(strategies, list) else []:
+        if isinstance(item, dict) and text(item.get("strategy")):
+            coping = text(item.get("patient_language")) or text(item.get("strategy"))
+            break
+    return {"care_team": care_team, "coping": coping}
 
 
 def participant_reports_query(patient_id):

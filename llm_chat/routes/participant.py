@@ -15,9 +15,10 @@ from datetime import datetime
 from functools import wraps
 from zoneinfo import ZoneInfo
 
-from flask import Blueprint, abort, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
+from ..extensions import db
 from ..models import Message, SafetyPlan, SavedSelection
 from ..services import participant_nav
 from ..services.greeting import greeting_for
@@ -69,8 +70,15 @@ def render_home():
 @participant_page
 def help_page():
     """Get help now as a page: for phones without JavaScript, and as the
-    link's target everywhere (the menu opens it as a dialog when it can)."""
-    return render_page("participant/help.html", current="help")
+    link's target everywhere (the menu opens it as a dialog when it can).
+    If the menu's data can't be loaded, the page still shows the crisis lines."""
+    try:
+        nav = participant_nav.build(current_user)
+    except Exception:
+        current_app.logger.exception("Get help now: the menu's data didn't load")
+        db.session.rollback()
+        return render_template("participant/help.html", nav=None, current="help")
+    return render_page("participant/help.html", current="help", nav=nav)
 
 
 @participant_bp.route("/exercises")

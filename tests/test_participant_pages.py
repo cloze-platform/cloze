@@ -305,3 +305,27 @@ def test_hidden_templates_and_windows_cannot_be_started(study, login_as, db):
     hidden = ChatTemplate.query.filter_by(title="Hidden chat").one()
     assert login_as(study["patient"]).post("/api/windows/start_conversation",
                                            json={"template_id": hidden.id}).status_code == 404
+
+
+# ── Get help now can't be taken down ──
+
+def test_help_survives_plan_data_of_the_wrong_shape(study, login_as, v2, db):
+    plan = _approve_plan(db, study)
+    plan.care_team = '{"not": "a list"}'
+    plan.coping_strategies = '[1, "two", {"strategy": 3}, {"strategy": "Walk", "patient_language": 4}]'
+    db.session.commit()
+    for path in ("/help", "/dashboard"):
+        html = _html(login_as(study["patient"]), path)
+        assert 'href="tel:988"' in html
+    assert "Walk" in _html(login_as(study["patient"]), "/help")
+
+
+def test_help_shows_the_crisis_lines_even_if_the_menu_fails(study, login_as, v2, monkeypatch):
+    from llm_chat.services import participant_nav
+
+    def broken(user, now=None):
+        raise RuntimeError("menu data failed")
+    monkeypatch.setattr(participant_nav, "build", broken)
+    resp = login_as(study["patient"]).get("/help")
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 200 and 'href="tel:988"' in html and '<nav aria-label="Study"' not in html
