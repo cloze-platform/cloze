@@ -61,21 +61,77 @@
     return wrap;
   }
 
-  function addReply(text, messageId) {
-    var wrap = el("div", "flex flex-col gap-1");
-    wrap.dataset.messageId = messageId;
-    var body = el("div", "p-prose text-base leading-[1.65]", text);
+  function render(root) {
+    if (window.ParticipantExercise) window.ParticipantExercise.renderReplies(root);
+  }
+
+  // A speaker's part of a reply: the same markup as templates/participant/_speaker.html.
+  function partNode(part) {
+    var node = el("div", "flex flex-col gap-1.5");
+    node.setAttribute("data-part", "");
+    var sp = part.speaker;
+    if (sp) {
+      node.dataset.speaker = sp.name;
+      var label = el("div", "flex items-center gap-2");
+      label.setAttribute("data-speaker-label", "");
+      if (sp.image_url) {
+        var img = el("img", "h-7 w-7 shrink-0 rounded-full object-cover");
+        img.src = sp.image_url;
+        img.alt = "";
+        label.appendChild(img);
+      } else {
+        var initial = el("span", "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-p-accent-soft text-xs font-semibold text-p-accent-ink", sp.initial);
+        initial.setAttribute("aria-hidden", "true");
+        label.appendChild(initial);
+      }
+      label.appendChild(el("span", "text-sm font-semibold text-p-ink", sp.name));
+      if (sp.role) label.appendChild(el("span", "text-[13px] text-p-hint", sp.role));
+      node.appendChild(label);
+    }
+    var body = el("div", "p-prose text-base leading-[1.65]", part.text);
     body.setAttribute("data-md", "");
-    wrap.appendChild(body);
-    wrap.appendChild(el("time", "text-xs text-p-hint", now()));
+    node.appendChild(body);
+    return node;
+  }
+
+  // A reply. In a chat with a cast, its speakers' parts appear one after
+  // another, like separate messages (together if the participant prefers
+  // less motion). Returns how long until the last part is shown, in ms.
+  var PART_GAP = 700;
+  function addReply(data) {
+    var parts = data.parts && data.parts.length ? data.parts : null;
+    var wrap = el("div", parts ? "flex flex-col gap-4" : "flex flex-col gap-1");
+    wrap.dataset.messageId = data.message_id;
+    var time = el("time", "text-xs text-p-hint", now());
+    if (!parts) {
+      var body = el("div", "p-prose text-base leading-[1.65]", data.response);
+      body.setAttribute("data-md", "");
+      wrap.appendChild(body);
+      wrap.appendChild(time);
+      list.appendChild(wrap);
+      render(wrap);
+      announce("New reply.");
+      return 0;
+    }
+    var gap = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : PART_GAP;
+    wrap.appendChild(time);
     list.appendChild(wrap);
-    if (window.ParticipantExercise) window.ParticipantExercise.renderReplies(wrap);
+    parts.forEach(function (part, i) {
+      function show() {
+        wrap.insertBefore(partNode(part), time);
+        render(wrap);
+        announce(part.speaker ? "New reply from " + part.speaker.name + "." : "New reply.");
+        if (i) scrollDown();
+      }
+      i && gap ? setTimeout(show, i * gap) : show();
+    });
+    return (parts.length - 1) * gap;
   }
 
   function showWaiting() {
     var wrap = el("div", "flex items-center gap-2.5 text-sm text-p-ink-3");
     wrap.id = "waiting";
-    wrap.appendChild(el("span", "", "Writing a reply"));
+    wrap.appendChild(el("span", "", form.dataset.writer ? form.dataset.writer + " is writing" : "Writing a reply"));
     var dots = el("span", "flex gap-1");
     dots.setAttribute("aria-hidden", "true");
     for (var i = 0; i < 3; i++) {
@@ -164,12 +220,11 @@
       status.appendChild(el("time", "", now()));
       wrap.dataset.messageId = data.user_message_id;
       delete wrap.dataset.pendingReply;
-      addReply(data.response, data.message_id);
-      announce("New reply.");
+      var shownIn = addReply(data);
       updateTurns(data.turns_remaining);
       scrollDown();
-      // The last turn ended the exercise: show it as finished.
-      if (data.ended) setTimeout(function () { window.location.reload(); }, 1200);
+      // The last turn ended the exercise: show it as finished, once the reply is all shown.
+      if (data.ended) setTimeout(function () { window.location.reload(); }, 1200 + shownIn);
       return;
     }
     if (failed.status === 0) {

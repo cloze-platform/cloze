@@ -220,3 +220,122 @@ def test_the_cast_read_for_a_participant_skips_removed_and_foreign_speakers(peop
     stranger.provider_id = people["other"].id
     _db.session.commit()
     assert cast_for_template(Template, people["patient"]) == ([], None)
+
+
+# ── What the participant sees ─────────────────────────────────
+
+from llm_chat.models import ChatTemplate, Conversation, Message, SavedSelection  # noqa: E402
+from llm_chat.services.llm_interface import LLMInterface  # noqa: E402
+
+
+@pytest.fixture
+def enrolled(people, login_as, chat, v2, monkeypatch):
+    """The participant enrolled in a flow whose chat has Star (main) and Sky,
+    with a started conversation. The model always answers as both."""
+    face = image(people["provider"], label="Star's face")
+    star, sky = speakers(people["provider"], "Star", "Sky")
+    star.role, sky.role, star.picture_asset_id = "Facilitator", "Practice student", face.id
+    chat.speaker_ids, chat.main_speaker_id = json.dumps([star.id, sky.id]), star.id
+    _db.session.commit()
+    resp = login_as(people["provider"]).post(f"/api/provider/flows/{chat.phase.flow.id}/enroll",
+                                             json={"patient_ids": [people["patient"].id]})
+    assert resp.status_code == 200
+    template = ChatTemplate.query.filter_by(flow_chat_id=chat.id).one()
+    conv = Conversation(user_id=people["patient"].id, title=template.title, model_id=chat.model_id,
+                        window_id=template.window_id, template_id=template.id, consent_provided=True)
+    _db.session.add(conv)
+    _db.session.commit()
+
+    histories = []
+
+    def call(cls, model, history, system_prompt=None, config_override=None, raise_on_error=False):
+        histories.append(history)
+        return "Star: Welcome back.\n**Sky:** Hi! I'm practising too.", 0.01
+
+    monkeypatch.setattr(LLMInterface, "call_llm", classmethod(call))
+    return {"conv": conv, "template": template, "star": star, "sky": sky, "face": face, "histories": histories,
+            **people}
+
+
+def send(client, conv, text="hello"):
+    return client.post(f"/api/conversation/{conv.id}/message",
+                       json={"message": text, "client_message_id": f"id-{text}"})
+
+
+def test_a_reply_comes_back_as_each_speakers_part(enrolled, login_as):
+    c = login_as(enrolled["patient"])
+    body = send(c, enrolled["conv"]).get_json()
+
+    # The reply is kept exactly as the model wrote it...
+    assert body["response"] == "Star: Welcome back.\n**Sky:** Hi! I'm practising too."
+    assert Message.query.get(body["message_id"]).content == body["response"]
+    # ...and split for the page.
+    assert [(p["speaker"]["name"], p["speaker"]["role"], p["text"]) for p in body["parts"]] == [
+        ("Star", "Facilitator", "Welcome back."), ("Sky", "Practice student", "Hi! I'm practising too.")]
+    assert body["parts"][0]["speaker"]["image_url"] == enrolled["face"].url
+    # No picture: initials, two letters because Star and Sky share an S.
+    assert (body["parts"][1]["speaker"]["image_url"], body["parts"][1]["speaker"]["initial"]) == (None, "Sk")
+
+    # The model sees its own tagged reply in the history, so it keeps the format.
+    assert send(c, enrolled["conv"], "again").status_code == 200
+    assert any("Star: Welcome back." in (m.get("content") or "") for m in enrolled["histories"][-1])
+
+
+def test_the_exercise_page_shows_each_part_under_its_speaker(enrolled, login_as):
+    c = login_as(enrolled["patient"])
+    send(c, enrolled["conv"])
+    page = c.get(f"/exercise/{enrolled['conv'].id}").get_data(as_text=True)
+
+    assert 'data-speaker="Star"' in page and 'data-speaker="Sky"' in page
+    assert page.index('data-speaker="Star"') < page.index('data-speaker="Sky"')
+    assert "Facilitator" in page and "Practice student" in page
+    assert f'src="{enrolled["face"].url}"' in page
+    # The waiting line names the main speaker.
+    assert 'data-writer="Star"' in page
+
+
+def test_a_chat_without_a_cast_shows_replies_as_before(enrolled, login_as):
+    chat = enrolled["template"].flow_chat
+    chat.speaker_ids, chat.main_speaker_id = None, None
+    _db.session.commit()
+    c = login_as(enrolled["patient"])
+
+    body = send(c, enrolled["conv"]).get_json()
+    page = c.get(f"/exercise/{enrolled['conv'].id}").get_data(as_text=True)
+
+    assert "parts" not in body
+    assert "data-speaker=" not in page and "data-writer" not in page
+    assert "Star: Welcome back." in page
+
+
+def test_a_speakers_picture_shows_only_if_the_participant_may_load_it(enrolled, login_as):
+    # A picture from another researcher's library (it can't be chosen through
+    # the API, but if it were there) is left out; the initial shows instead.
+    other_face = image(enrolled["other"])
+    enrolled["star"].picture_asset_id = other_face.id
+    _db.session.commit()
+    body = send(login_as(enrolled["patient"]), enrolled["conv"]).get_json()
+    assert body["parts"][0]["speaker"]["image_url"] is None
+
+
+# ── The notebook ───────────────────────────────────────────────
+
+def save(client, conv, **extra):
+    return client.post("/api/save_selection", json={"conversation_id": conv.id, "text": "Hi! I'm practising too.",
+                                                    "message_ids": [], **extra})
+
+
+def test_a_saved_line_keeps_who_said_it(enrolled, login_as):
+    c = login_as(enrolled["patient"])
+    send(c, enrolled["conv"])
+
+    assert save(c, enrolled["conv"], speaker_name="sky").status_code == 200
+    assert save(c, enrolled["conv"], speaker_name="Moon").status_code == 200       # not in the cast: dropped
+    assert save(c, enrolled["conv"], speaker_name=["Sky"]).status_code == 400
+
+    assert [s.speaker_name for s in SavedSelection.query.order_by(SavedSelection.id)] == ["Sky", None]
+    assert c.get("/api/selections").get_json()[-1]["speaker_name"] == "Sky"
+    notebook = c.get("/notebook").get_data(as_text=True)
+    assert "Sky · " in notebook
+    panel = c.get(f"/exercise/{enrolled['conv'].id}").get_data(as_text=True)
+    assert "Sky · Meet Sky and Star" in panel

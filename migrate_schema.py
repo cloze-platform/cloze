@@ -77,9 +77,10 @@ COLUMN_ADDITIONS = [
     # Stage 2 groups: the line under a group's name on the participant's Home.
     ('flow_phases', 'description', 'TEXT'),
     # Stage 2 speakers: a chat's cast (JSON list of speaker ids) and main
-    # speaker. The speakers table itself is new.
+    # speaker, and who said a saved line. The speakers table itself is new.
     ('flow_chats', 'speaker_ids', 'TEXT'),
     ('flow_chats', 'main_speaker_id', 'INTEGER'),
+    ('saved_selections', 'speaker_name', 'VARCHAR(40)'),
 ]
 
 # ── Indexes on existing tables ───────────────────────────────────
