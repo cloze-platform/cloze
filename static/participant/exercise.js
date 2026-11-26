@@ -30,10 +30,15 @@
     // A study's own text written as HTML: shown only once DOMPurify has
     // cleaned it, as today. Otherwise the built-in text stays.
     var text = document.getElementById("safety-text");
+    // Text and links only: no ids, styles, forms, images or dialogs, so the
+    // text can't restyle or stand in for Get help now. (An old custom text may
+    // carry its own checkbox; the form below has one.)
     if (text && text.dataset.customHtml && typeof DOMPurify !== "undefined") {
-      text.innerHTML = DOMPurify.sanitize(text.dataset.customHtml);
-      // An old custom text may carry its own checkbox; the form below has one.
-      text.querySelectorAll("input").forEach(function (input) { input.remove(); });
+      text.innerHTML = DOMPurify.sanitize(text.dataset.customHtml, {
+        ALLOWED_TAGS: ["p", "br", "strong", "b", "em", "i", "u", "ul", "ol", "li", "h2", "h3", "h4", "a", "div", "span"],
+        ALLOWED_ATTR: ["href"],
+        ALLOW_DATA_ATTR: false,
+      });
     }
 
     check.addEventListener("change", function () {

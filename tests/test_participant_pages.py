@@ -289,3 +289,19 @@ def test_home_says_nothing_about_reports_when_they_are_off(study, login_as, v2, 
 def test_home_for_a_participant_with_nothing_yet(make_user, login_as, v2):
     home = _home(login_as(make_user("new")))
     assert "Nothing to do yet" in home and "data-help-open" in home
+
+
+# ── Crisis lines on error pages, hidden chats ──
+
+@pytest.mark.parametrize("path", ["/no-such-page", "/exercise/99999"])
+def test_error_pages_keep_the_crisis_lines(study, login_as, v2, path):
+    resp = login_as(study["patient"]).get(path)
+    assert resp.status_code == 404 and 'href="tel:988"' in resp.get_data(as_text=True)
+
+
+def test_hidden_templates_and_windows_cannot_be_started(study, login_as, db):
+    from llm_chat.models import ChatTemplate
+    _approve_plan(db, study)
+    hidden = ChatTemplate.query.filter_by(title="Hidden chat").one()
+    assert login_as(study["patient"]).post("/api/windows/start_conversation",
+                                           json={"template_id": hidden.id}).status_code == 404

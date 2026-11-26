@@ -167,3 +167,11 @@ def test_todays_page_alerts_as_before(study, login_as, ai, guard):
     _send(client, conv, "hopeless", client_id=None)
     _send(client, conv, "hopeless", client_id=None)
     assert EscalationEvent.query.count() == 2
+
+
+def test_reusing_an_id_with_different_text_alerts_again(study, login_as, ai, guard):
+    conv, client = study["thoughts_conv"], login_as(study["patient"])
+    ai.fail = True
+    _send(client, conv, "I feel hopeless")
+    _send(client, conv, "Totally hopeless now")       # a hand-made client reusing the id
+    assert EscalationEvent.query.count() == 2

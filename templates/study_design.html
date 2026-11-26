@@ -483,7 +483,7 @@
   function renderModelOptions(chat) {
     var current = models.some(function(m) { return m.id === chat.model_id; })
       ? ''
-      : '<option value="' + chat.model_id + '" selected>' + escapeHtml((chat.model_name || 'Current model') + ' (unavailable)') + '</option>';
+      : '<option value="' + escapeHtml(String(chat.model_id)) + '" selected>' + escapeHtml((chat.model_name || 'Current model') + ' (unavailable)') + '</option>';
     return current + models.map(function(m) {
       return '<option value="' + m.id + '"' + (m.id === chat.model_id ? ' selected' : '') + '>' + escapeHtml(m.name) + '</option>';
     }).join('');
