@@ -6,7 +6,7 @@ Cloze is still in 0.x: a minor release (0.6 → 0.7) can change behaviour, setti
 
 ## [Unreleased]
 
-## [0.6.0] - Unreleased
+## [0.6.0] - 2026-11-25
 
 The first stage of the participant redesign, a researcher media library, and a round of safety and security fixes. **The new participant interface is opt-in**: participants keep today's pages until an admin turns it on.
 
@@ -90,8 +90,8 @@ The first release from cloze-platform:
 
 The cloze.uk production baseline.
 
-[Unreleased]: https://github.com/cloze-platform/cloze/compare/v0.5.1...HEAD
-[0.6.0]: https://github.com/cloze-platform/cloze/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/cloze-platform/cloze/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/cloze-platform/cloze/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/cloze-platform/cloze/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/cloze-platform/cloze/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/cloze-platform/cloze/releases/tag/v0.4.0
