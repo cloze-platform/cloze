@@ -756,6 +756,7 @@
         w.templates.forEach((t, i) => {
           addTemplateEditor();
           const el = document.querySelectorAll('.template-editor-item')[i];
+          el.dataset.templateId = t.id;  // saved in place, so started chats stay linked
           el.querySelector('.template-title-input').value = t.title || '';
           el.querySelector('.template-purpose-input').value = t.purpose || '';
           el.querySelector('.template-model-select').value = t.model_id || '';
@@ -832,6 +833,7 @@
     const templates = [];
     document.querySelectorAll('.template-editor-item').forEach(item => {
       templates.push({
+        id: item.dataset.templateId ? parseInt(item.dataset.templateId) : null,
         title: item.querySelector('.template-title-input').value,
         purpose: item.querySelector('.template-purpose-input').value,
         model_id: parseInt(item.querySelector('.template-model-select').value),

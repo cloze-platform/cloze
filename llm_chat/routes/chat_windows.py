@@ -68,8 +68,9 @@ def get_chat_window(window_id):
     if window.provider_id != current_user.id:
         abort(403)
 
-    # Get templates for this window
-    templates = ChatTemplate.query.filter_by(window_id=window_id).order_by(ChatTemplate.order_index).all()
+    # The templates the edit form shows; hidden ones aren't part of the edit
+    templates = (ChatTemplate.query.filter_by(window_id=window_id, visible=True)
+                 .order_by(ChatTemplate.order_index, ChatTemplate.id).all())
 
     window_data = window.to_dict()
     window_data['templates'] = [
@@ -198,6 +199,20 @@ def update_chat_window(window_id):
 
     data = request.json or {}
 
+    # Check the templates before changing anything
+    if 'templates' in data:
+        flags = ProviderFeatureFlags.query.filter_by(provider_id=current_user.id).first()
+        admin_allowed_models = json.loads(flags.allowed_models) if flags and flags.allowed_models else None
+        for template_data in data['templates']:
+            tmpl_model_id = template_data.get('model_id')
+            if admin_allowed_models and tmpl_model_id not in admin_allowed_models:
+                return jsonify({'error': f'Model {tmpl_model_id} is not permitted for this study'}), 403
+
+        current = {t.id: t for t in ChatTemplate.query.filter_by(window_id=window_id, visible=True)}
+        sent_ids = [t.get('id') for t in data['templates'] if t.get('id') is not None]
+        if len(set(sent_ids)) != len(sent_ids) or not set(sent_ids) <= set(current):
+            return jsonify({'error': 'Templates must be this window\'s, each listed once'}), 400
+
     # Update window fields
     if 'title' in data:
         window.title = data['title']
@@ -214,44 +229,42 @@ def update_chat_window(window_id):
 
     window.updated_at = time.time()
 
-    # Update templates if provided
+    # The templates sent are the window's visible templates, in order. Ones
+    # with an id are updated in place: participants' conversations point at
+    # them (conversations.template_id), so they keep their ids.
     if 'templates' in data:
         can_set_custom_prompts = get_effective_setting('allow_custom_prompts', current_user.id, True)
+        sent = set(sent_ids)
 
-        # Admin-enforced model allowlist for this provider
-        flags = ProviderFeatureFlags.query.filter_by(provider_id=current_user.id).first()
-        admin_allowed_models = json.loads(flags.allowed_models) if flags and flags.allowed_models else None
+        for template_id, template in current.items():
+            if template_id in sent:
+                continue
+            if Conversation.query.filter_by(template_id=template_id).first():
+                template.visible = False  # started: keep it for its conversations
+            else:
+                db.session.delete(template)
 
-        # Remove existing templates
-        ChatTemplate.query.filter_by(window_id=window_id).delete()
-
-        # Add new templates
+        # Fields left out of a template keep their values (the form doesn't
+        # send max_messages, for one)
         for idx, template_data in enumerate(data['templates']):
-            custom_prompt = template_data.get('custom_system_prompt')
-            if not can_set_custom_prompts:
-                custom_prompt = None
-
-            # Validate model against admin allowlist
-            tmpl_model_id = template_data.get('model_id')
-            if admin_allowed_models and tmpl_model_id not in admin_allowed_models:
-                return jsonify({'error': f'Model {tmpl_model_id} is not permitted for this study'}), 403
+            template = current.get(template_data.get('id'))
+            is_new = template is None
+            if is_new:
+                template = ChatTemplate(window_id=window_id)
+                db.session.add(template)
+            template.order_index = idx
+            for field in ('title', 'purpose', 'model_id', 'max_messages'):
+                if field in template_data or is_new:
+                    setattr(template, field, template_data.get(field))
+            if 'custom_system_prompt' in template_data and can_set_custom_prompts:
+                template.custom_system_prompt = template_data['custom_system_prompt']
 
             # Fall back to provider default prompt if none specified
-            prompt_id = template_data.get('system_prompt_id')
-            if not prompt_id and flags and flags.default_system_prompt_id:
-                prompt_id = flags.default_system_prompt_id
-
-            template = ChatTemplate(
-                window_id=window_id,
-                title=template_data.get('title'),
-                purpose=template_data.get('purpose'),
-                model_id=tmpl_model_id,
-                system_prompt_id=prompt_id,
-                custom_system_prompt=custom_prompt,
-                max_messages=template_data.get('max_messages'),
-                order_index=idx
-            )
-            db.session.add(template)
+            if 'system_prompt_id' in template_data or is_new:
+                prompt_id = template_data.get('system_prompt_id')
+                if not prompt_id and flags and flags.default_system_prompt_id:
+                    prompt_id = flags.default_system_prompt_id
+                template.system_prompt_id = prompt_id
 
     # Handle report configuration
     report_config = data.get('report_config')
