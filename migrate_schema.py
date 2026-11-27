@@ -81,6 +81,11 @@ COLUMN_ADDITIONS = [
     ('flow_chats', 'speaker_ids', 'TEXT'),
     ('flow_chats', 'main_speaker_id', 'INTEGER'),
     ('saved_selections', 'speaker_name', 'VARCHAR(40)'),
+    # Stage 2 guides: a chat's guide, whether it opens at the start, and
+    # whether the model is given its text. The guides table itself is new.
+    ('flow_chats', 'guide_id', 'INTEGER'),
+    ('flow_chats', 'guide_opens_on_start', 'BOOLEAN'),
+    ('flow_chats', 'guide_to_model', 'BOOLEAN'),
 ]
 
 # ── Indexes on existing tables ───────────────────────────────────
@@ -193,7 +198,7 @@ def run_migration(apply=False):
     # ── Check for new tables (will be created by db.create_all) ──
     new_tables = ['safety_plans', 'audit_log', 'escalation_events', 'provider_feature_flags',
                    'study_flows', 'flow_phases', 'flow_chats', 'flow_enrollments',
-                   'media_assets', 'media_renditions', 'speakers']
+                   'media_assets', 'media_renditions', 'speakers', 'guides']
     print()
     for t in new_tables:
         if table_exists(cursor, t, db_type):

@@ -15,6 +15,7 @@ from ..models import ProviderFeatureFlags
 from ..utils.settings_resolution import Settings, get_effective_setting, get_provider_id_for_patient
 from ..services.greeting import resolve_greeting
 from ..services.speakers import cast_for_template, reply_parts
+from ..services.guides import with_guide
 from ..services import participant_nav
 from ..services.conversation_end import end as end_conversation, stamp_window_closed
 from ..utils.participant_ui import uses_v2
@@ -411,6 +412,11 @@ def send_message(conversation_id):
                          + [{'role': 'user', 'content': message_text}])
 
     system_prompt = conversation.system_prompt_content
+    # The chat's guide, after the composed prompt, only if the team chose to
+    # give it to the model (services/guides.py). The stored prompt is unchanged.
+    if conversation.template_id:
+        system_prompt = with_guide(system_prompt, db.session.get(ChatTemplate, conversation.template_id),
+                                   conversation.user)
 
     # Inject turn-count awareness when approaching the limit
     turns_remaining = None

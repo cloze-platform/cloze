@@ -8,6 +8,7 @@ from .audit import AuditLog, EscalationEvent
 from .study_flow import StudyFlow, FlowPhase, FlowChat, FlowEnrollment
 from .media import MediaAsset, MediaRendition
 from .speaker import Speaker
+from .guide import Guide
 
 __all__ = [
     "User", "ProviderPatient",
@@ -19,5 +20,5 @@ __all__ = [
     "AuditLog", "EscalationEvent",
     "StudyFlow", "FlowPhase", "FlowChat", "FlowEnrollment",
     "MediaAsset", "MediaRendition",
-    "Speaker",
+    "Speaker", "Guide",
 ]
