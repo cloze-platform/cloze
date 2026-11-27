@@ -59,7 +59,7 @@
               </div>
             </form>
             <div class="flex flex-wrap items-center justify-between gap-2">
-              <time class="text-[13px] text-p-hint" datetime="{{ line.created_at|p_iso }}">{{ line.created_at|p_ago(nav.timezone, nav.now) }}</time>
+              <span class="text-[13px] text-p-hint">{% if line.speaker_name %}{{ line.speaker_name }} · {% endif %}<time datetime="{{ line.created_at|p_iso }}">{{ line.created_at|p_ago(nav.timezone, nav.now) }}</time></span>
               <span class="flex gap-1">
                 <button type="button" data-note-edit class="inline-flex min-h-9 items-center rounded-lg px-2.5 text-sm font-semibold text-p-accent-ink hover:bg-p-raised">{{ "Edit note" if line.note else "Add a note" }}</button>
                 <button type="button" data-remove class="inline-flex min-h-9 items-center rounded-lg px-2.5 text-sm font-semibold text-p-ink-3 hover:bg-p-raised hover:text-p-help">Remove</button>

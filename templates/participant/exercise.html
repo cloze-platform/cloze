@@ -3,6 +3,7 @@
    state allows (routes/participant.py exercise_state): the reply box, or why
    replying isn't possible. On a phone this page has its own header and no tabs. #}
 
+{% from "participant/_speaker.html" import reply_part %}
 {% block title %}{{ exercise.title }} · Cloze{% endblock %}
 
 {% block head %}
@@ -81,8 +82,13 @@
             {% endif %}
           </div>
         {% else %}
-          <div class="flex flex-col gap-1" data-message-id="{{ m.id }}">
-            <div class="p-prose text-base leading-[1.65]" data-md>{{ m.content }}</div>
+          {% set parts = reply_parts.get(m.id) %}
+          <div class="flex flex-col {{ 'gap-4' if parts else 'gap-1' }}" data-message-id="{{ m.id }}">
+            {% if parts %}
+              {% for part in parts %}{{ reply_part(part) }}{% endfor %}
+            {% else %}
+              <div class="p-prose text-base leading-[1.65]" data-md>{{ m.content }}</div>
+            {% endif %}
             <time class="text-xs text-p-hint" datetime="{{ m.timestamp|p_iso }}">{{ m.timestamp|p_when(nav.timezone) }}</time>
           </div>
         {% endif %}
@@ -107,7 +113,7 @@
         <span><strong class="font-semibold" data-few-turns-count>{{ exercise.turns_left }} turn{{ "s" if exercise.turns_left != 1 }} left in this exercise.</strong> When they're used up, you can still read everything here.</span>
       </p>
       {# The reply box: one line that grows as you type (static/participant/chat.js). #}
-      <form id="composer" data-conversation-id="{{ exercise.conversation_id }}"
+      <form id="composer" data-conversation-id="{{ exercise.conversation_id }}"{% if writer %} data-writer="{{ writer }}"{% endif %}
             class="flex items-end gap-2 rounded-[28px] border border-p-line-strong bg-p-surface py-1.5 pl-5 pr-1.5 shadow-[0_1px_2px_rgba(24,24,31,0.04),0_8px_24px_rgba(24,24,31,0.05)] focus-within:border-p-accent focus-within:shadow-[0_0_0_1px_var(--p-accent)]">
         <label for="reply" class="sr-only">Your reply</label>
         <textarea id="reply" name="message" rows="1" required autocomplete="off" maxlength="10000" placeholder="Write your reply…"
@@ -198,7 +204,7 @@
       {% for selection, title in notebook %}
         <li class="flex flex-col gap-1.5 border-t border-p-line py-4">
           <p class="text-base leading-relaxed">“{{ selection.selection_text }}”</p>
-          <p class="text-[13px] text-p-hint">{{ title }} · {{ selection.created_at|p_ago(nav.timezone, nav.now) }}</p>
+          <p class="text-[13px] text-p-hint">{% if selection.speaker_name %}{{ selection.speaker_name }} · {% endif %}{{ title }} · {{ selection.created_at|p_ago(nav.timezone, nav.now) }}</p>
         </li>
       {% endfor %}
     </ul>

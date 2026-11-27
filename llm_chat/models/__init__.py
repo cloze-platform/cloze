@@ -7,6 +7,7 @@ from .safety_plan import SafetyPlan
 from .audit import AuditLog, EscalationEvent
 from .study_flow import StudyFlow, FlowPhase, FlowChat, FlowEnrollment
 from .media import MediaAsset, MediaRendition
+from .speaker import Speaker
 
 __all__ = [
     "User", "ProviderPatient",
@@ -18,4 +19,5 @@ __all__ = [
     "AuditLog", "EscalationEvent",
     "StudyFlow", "FlowPhase", "FlowChat", "FlowEnrollment",
     "MediaAsset", "MediaRendition",
+    "Speaker",
 ]

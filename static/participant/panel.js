@@ -73,7 +73,7 @@
   window.ParticipantPanel = {
     isOpen: isOpen,
     open: function () { open(!wide.matches); },
-    addLine: function (text, title) {
+    addLine: function (text, title, speaker) {
       var list = document.getElementById("notebook-list");
       var item = document.createElement("li");
       item.className = "flex flex-col gap-1.5 border-t border-p-line py-4";
@@ -82,7 +82,7 @@
       quote.textContent = "“" + text + "”";
       var meta = document.createElement("p");
       meta.className = "text-[13px] text-p-hint";
-      meta.textContent = title + " · Just now";
+      meta.textContent = (speaker ? speaker + " · " : "") + title + " · Just now";
       item.appendChild(quote);
       item.appendChild(meta);
       list.insertBefore(item, list.firstChild);

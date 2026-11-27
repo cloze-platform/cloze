@@ -8,12 +8,13 @@ from sqlalchemy.exc import IntegrityError
 from ..extensions import db
 from ..models import (
     User, ProviderPatient, ProviderSettings, SystemPrompt,
-    Conversation, Model, Message, SavedSelection, ChatWindow
+    Conversation, Model, Message, SavedSelection, ChatWindow, ChatTemplate
 )
 from ..services.llm_interface import LLMCallError, LLMInterface
 from ..models import ProviderFeatureFlags
 from ..utils.settings_resolution import Settings, get_effective_setting, get_provider_id_for_patient
 from ..services.greeting import resolve_greeting
+from ..services.speakers import cast_for_template, reply_parts
 from ..services import participant_nav
 from ..services.conversation_end import end as end_conversation, stamp_window_closed
 from ..utils.participant_ui import uses_v2
@@ -520,6 +521,14 @@ def _send_result(conversation, user_message, reply, max_turns=None, repeat=False
               'ended': conversation.ended_at is not None, 'end_reason': conversation.end_reason}
     if repeat:
         result['repeat'] = True
+    # In a chat with a cast, the parts each speaker says (services/speakers.py).
+    # 'response' stays the reply exactly as the model wrote it.
+    template = db.session.get(ChatTemplate, conversation.template_id) if conversation.template_id else None
+    if template is not None:
+        cast, main = cast_for_template(template, conversation.user)
+        parts = reply_parts(reply.content, cast, main, conversation.user)
+        if parts:
+            result['parts'] = parts
     if current_user.is_patient():
         if max_turns is None:
             max_turns = get_effective_setting('max_turns_per_conversation',
@@ -579,13 +588,23 @@ def save_selection():
                        or isinstance(i, str) and re.fullmatch(r'[0-9]{1,12}', i) for i in message_ids)):
         return jsonify({'error': 'message_ids must be a list of message ids'}), 400
     message_ids = [int(i) for i in message_ids]
+    # Who said it, from a chat with a cast: kept only if it's a name in that
+    # chat's cast now, spelled as the cast spells it.
+    speaker_name = data.get('speaker_name')
+    if speaker_name is not None and (not isinstance(speaker_name, str) or len(speaker_name) > 40):
+        return jsonify({'error': 'speaker_name must be a speaker\'s name.'}), 400
+    if speaker_name:
+        template = db.session.get(ChatTemplate, conversation.template_id) if conversation.template_id else None
+        cast, _ = cast_for_template(template, conversation.user) if template is not None else ([], None)
+        speaker_name = next((s.name for s in cast if s.name.lower() == speaker_name.strip().lower()), None)
 
     selection = SavedSelection(
         user_id=current_user.id,
         conversation_id=conversation_id,
         selection_text=text,
         message_ids=json.dumps(message_ids),
-        note=note or None
+        note=note or None,
+        speaker_name=speaker_name or None,
     )
     db.session.add(selection)
     db.session.commit()
@@ -620,6 +639,7 @@ def get_selections():
         'own_note': s.note,
         'conversation_title': conversation_titles.get(s.conversation_id),
         'conversation_id': s.conversation_id,
+        'speaker_name': s.speaker_name,
         'created_at': s.created_at
     } for s in selections])
 

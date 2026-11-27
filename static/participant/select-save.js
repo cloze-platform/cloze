@@ -10,12 +10,24 @@
   var conversationId = Number(chat.getAttribute("data-save-to"));
   var title = (document.querySelector("main h1") || {}).textContent || "";
   var touch = window.matchMedia("(pointer: coarse)").matches;
-  var current = null;          // { text, messageIds }
+  var current = null;          // { text, messageIds, speaker }
   var timer = null;
 
   function hide() {
     bar.classList.add("hidden");
     current = null;
+  }
+
+  // Whether the range covers any of node's text, not just its edge.
+  function overlaps(range, node) {
+    var whole = document.createRange();
+    whole.selectNodeContents(node);
+    var part = document.createRange();
+    if (range.compareBoundaryPoints(Range.START_TO_START, whole) < 0) part.setStart(whole.startContainer, whole.startOffset);
+    else part.setStart(range.startContainer, range.startOffset);
+    if (range.compareBoundaryPoints(Range.END_TO_END, whole) > 0) part.setEnd(whole.endContainer, whole.endOffset);
+    else part.setEnd(range.endContainer, range.endOffset);
+    return !part.collapsed && part.toString().trim() !== "";
   }
 
   function selectedInChat() {
@@ -30,7 +42,15 @@
       if (range.intersectsNode(el)) ids.push(Number(el.getAttribute("data-message-id")));
     });
     if (!ids.length) return null;         // the greeting or the safety text, not a message
-    return { text: text, messageIds: ids, rect: range.getBoundingClientRect() };
+    // Who said it: when the selected text is all in one speaker's part (a
+    // chat with a cast). A triple-click selection ends at the very start of
+    // the next part, so count only parts whose text it actually covers.
+    var speakers = [];
+    chat.querySelectorAll("[data-part]").forEach(function (el) {
+      if (range.intersectsNode(el) && overlaps(range, el)) speakers.push(el.getAttribute("data-speaker") || "");
+    });
+    var speaker = speakers.length && speakers.every(function (n) { return n && n === speakers[0]; }) ? speakers[0] : null;
+    return { text: text, messageIds: ids, speaker: speaker, rect: range.getBoundingClientRect() };
   }
 
   function place(rect) {
@@ -74,9 +94,10 @@
     var saving = current;
     button.disabled = true;
     try {
-      await Cloze.api("POST", "/api/save_selection",
-                      { conversation_id: conversationId, text: saving.text, message_ids: saving.messageIds });
-      if (window.ParticipantPanel) window.ParticipantPanel.addLine(saving.text, title);
+      var body = { conversation_id: conversationId, text: saving.text, message_ids: saving.messageIds };
+      if (saving.speaker) body.speaker_name = saving.speaker;
+      await Cloze.api("POST", "/api/save_selection", body);
+      if (window.ParticipantPanel) window.ParticipantPanel.addLine(saving.text, title, saving.speaker);
       Cloze.announce("Saved to your notebook.");
       label.textContent = "Saved";
       setTimeout(function () {

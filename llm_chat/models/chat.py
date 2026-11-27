@@ -139,6 +139,8 @@ class SavedSelection(db.Model):
     selection_text = db.Column(db.Text, nullable=False)
     message_ids = db.Column(db.Text)
     note = db.Column(db.Text)          # the participant's own note on the line
+    # Who said the line, when it came from one speaker's part of a reply.
+    speaker_name = db.Column(db.String(40), nullable=True)
     created_at = db.Column(db.Float, default=lambda: time.time())
 
     NOTE_LIMIT = 1000

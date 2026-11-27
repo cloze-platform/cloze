@@ -23,6 +23,7 @@ from ..extensions import db
 from ..models import Message, SafetyPlan, SavedSelection
 from ..services import participant_nav
 from ..services.greeting import greeting_for
+from ..services.speakers import cast_for_template, reply_parts
 from ..services.safety_info import DEFAULT_AGREEMENT, bold, safety_info
 from ..utils.access_hours import DEFAULT_TZ
 from ..utils.participant_ui import uses_v2
@@ -143,9 +144,14 @@ def _render_exercise(nav, ex, messages):
     state = exercise_state(nav, ex)
     later = ex.group.exercises[ex.group.exercises.index(ex) + 1:]
     next_ex = next((e for e in later if e.state != participant_nav.FINISHED and not nav.locked(e)), None)
+    # In a chat with a cast, each reply shows as the parts its speakers say.
+    cast, main = cast_for_template(ex.template, current_user)
+    parts = {m.id: reply_parts(m.content, cast, main, current_user)
+             for m in messages if m.role == "assistant"} if cast else {}
     return render_page(
         "participant/exercise.html", nav, current="exercise", current_exercise=ex.id,
         phone_bar=False, exercise=ex, group=ex.group, messages=messages, state=state, next_exercise=next_ex,
+        reply_parts=parts, writer=main.name if main else None,
         greeting=greeting_for(ex.id, current_user) if not messages else None,
         safety=safety_info(nav.provider_id) if state == "agree" else None, default_agreement=DEFAULT_AGREEMENT,
         notebook=participant_nav.notebook_entries(current_user.id) if nav.can_save else None,
