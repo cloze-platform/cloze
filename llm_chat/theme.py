@@ -149,6 +149,10 @@ def participant_tokens(theme):
         "done": "#13795B", "done-fill": "#13795B", "done-soft": "#E6F4EE",
         "waiting": "#8A5300", "waiting-soft": "#FFF3DC", "waiting-line": "#F1D9A6",
         "help": "#A3213D", "help-soft": "#FDECEF", "help-line": "#F6C9D2",
+        # The notebook's paper: a warm sheet on a slightly darker desk, faint
+        # rules, a margin line in the accent, and the participant's "pen".
+        "desk": "#EFEBE3", "paper": "#FBF8F1", "paper-rule": "#E8E1D3", "paper-margin": _mix(p, 0.35, "#FBF8F1"),
+        "paper-hint": "#5E5E6A", "pen": _mix(p, 0.78, "#000000"),
     }
     page, card, raised, border = (theme[k] for k in ("dark_page", "dark_card", "dark_raised", "dark_border"))
     accent_ink_dark = _mix(p, 0.42)
@@ -163,6 +167,8 @@ def participant_tokens(theme):
         "done": "#5FD3A6", "done-fill": "#2FA67A", "done-soft": "#16302A",
         "waiting": "#F2C46B", "waiting-soft": "#3A2E16", "waiting-line": "#5A4520",
         "help": "#FF9DB0", "help-soft": "#3B1B25", "help-line": "#5C2A38",
+        "desk": page, "paper": "#25221D", "paper-rule": "#353027", "paper-margin": _mix(p, 0.45, "#25221D"),
+        "paper-hint": "#B6B0A4", "pen": accent_ink_dark,
     }
     return light, dark
 
