@@ -21,7 +21,10 @@
   .p-prose pre code { padding: 0; background: none; }
   .p-prose blockquote { padding-left: 1em; border-left: 3px solid var(--p-line-strong); color: var(--p-ink-3); }
   .p-prose table { border-collapse: collapse; } .p-prose th, .p-prose td { border: 1px solid var(--p-line); padding: 0.3em 0.6em; }
-  [data-md]:not([data-md-done]) { white-space: pre-wrap; }
+  [data-md]:not([data-md-done]), [data-guide-md]:not([data-guide-done]) { white-space: pre-wrap; }
+  /* Guides: images from the study's media library, at most the panel's width. */
+  .p-guide img { max-width: 100%; height: auto; border-radius: 14px; }
+  .p-guide blockquote { border-radius: 14px; background: var(--p-quiet); padding: 0.75em 1em; }
 </style>
 {% endblock %}
 
@@ -46,8 +49,14 @@
       {% if closes_soon and state in ("open", "agree") %}
         <span class="hidden sm:inline">Open until <time data-closes-at="{{ group.closes_at }}" datetime="{{ group.closes_at|p_iso }}">{{ group.closes_at|p_when(nav.timezone) }}</time></span>
       {% endif %}
+      {% if guide %}
+        <a href="#pane-guide" id="guide-toggle" data-panel-open="guide" aria-controls="panel"
+           class="inline-flex min-h-10 items-center gap-2 rounded-[10px] border border-p-line-strong bg-p-surface px-3 text-sm font-medium text-p-ink no-underline hover:bg-p-raised aria-expanded:bg-p-accent-soft aria-expanded:border-p-accent-line">
+          {{ icon("page", 16) }}<span class="hidden sm:inline">Guide</span><span class="sr-only sm:hidden">Guide</span>
+        </a>
+      {% endif %}
       {% if notebook is not none %}
-        <a href="{{ url_for('participant.notebook') }}" id="panel-toggle" aria-controls="panel"
+        <a href="{{ url_for('participant.notebook') }}" id="panel-toggle" data-panel-open="notebook" aria-controls="panel"
            class="inline-flex min-h-10 items-center gap-2 rounded-[10px] border border-p-line-strong bg-p-surface px-3 text-sm font-medium text-p-ink no-underline hover:bg-p-raised aria-expanded:bg-p-accent-soft aria-expanded:border-p-accent-line">
           {{ icon("notebook", 16) }}<span class="hidden sm:inline">Notebook</span>
           <span class="sr-only sm:not-sr-only text-p-hint" data-notebook-count>{{ nav.notebook_count }}</span>
@@ -112,6 +121,15 @@
         <span class="mt-0.5 text-p-waiting">{{ icon("clock", 16, "", 2) }}</span>
         <span><strong class="font-semibold" data-few-turns-count>{{ exercise.turns_left }} turn{{ "s" if exercise.turns_left != 1 }} left in this exercise.</strong> When they're used up, you can still read everything here.</span>
       </p>
+      {% if guide %}
+        {# On a phone, the guide is one tap away beside the reply box. #}
+        <div class="mb-2 flex lg:hidden">
+          <button type="button" data-panel-open="guide" aria-controls="panel"
+                  class="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-p-line-strong bg-p-surface px-3 text-sm font-medium text-p-ink hover:bg-p-raised">
+            {{ icon("page", 16) }}Guide
+          </button>
+        </div>
+      {% endif %}
       {# The reply box: one line that grows as you type (static/participant/chat.js). #}
       <form id="composer" data-conversation-id="{{ exercise.conversation_id }}"{% if writer %} data-writer="{{ writer }}"{% endif %}
             class="flex items-end gap-2 rounded-[28px] border border-p-line-strong bg-p-surface py-1.5 pl-5 pr-1.5 shadow-[0_1px_2px_rgba(24,24,31,0.04),0_8px_24px_rgba(24,24,31,0.05)] focus-within:border-p-accent focus-within:shadow-[0_0_0_1px_var(--p-accent)]">
@@ -181,23 +199,44 @@
 {% endblock %}
 
 {% block panel %}
-{% if notebook is not none %}
+{% if notebook is not none or guide %}
+{% set tabs = (["guide"] if guide else []) + (["notebook"] if notebook is not none else []) %}
 {# The side panel: beside the exercise on a computer, a sheet from the bottom
-   on a phone (static/participant/panel.js). Stage 1 has the Notebook only;
-   guides join it in stage 2. #}
+   on a phone (static/participant/panel.js). The chat's guide and the
+   Notebook, as tabs when there are both. #}
 <div id="panel-backdrop" class="fixed inset-0 z-30 hidden bg-black/40 lg:hidden"></div>
-<aside id="panel" aria-labelledby="panel-heading" tabindex="-1"
+<aside id="panel" aria-label="{{ 'Guide and notebook' if tabs|length > 1 else ('Guide' if guide else 'Notebook') }}" tabindex="-1"
+       {% if open_guide %}data-open-guide="{{ exercise.id }}"{% endif %}
        class="fixed inset-x-0 bottom-0 z-40 hidden max-h-[85vh] flex-col overflow-y-auto rounded-t-[28px] bg-p-page shadow-2xl
               lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:max-h-none lg:w-[380px] lg:shrink-0 lg:rounded-none lg:border-l lg:border-p-line lg:shadow-none">
-  <div class="flex items-center justify-between gap-2 border-b border-p-line py-2 pl-5 pr-2.5">
-    <span class="text-sm font-semibold text-p-ink">Notebook</span>
+  <div class="flex items-center justify-between gap-2 border-b border-p-line py-2 pl-3 pr-2.5">
+    {% if tabs|length > 1 %}
+      <div role="tablist" aria-label="Side panel" class="flex gap-1">
+        {% for t in tabs %}
+          <button type="button" role="tab" id="tab-{{ t }}" aria-controls="pane-{{ t }}" data-tab="{{ t }}"
+                  aria-selected="{{ 'true' if loop.first else 'false' }}" tabindex="{{ 0 if loop.first else -1 }}"
+                  class="min-h-9 rounded-lg px-3 text-sm font-semibold text-p-ink-3 hover:bg-p-raised aria-selected:bg-p-accent-soft aria-selected:text-p-accent-ink">{{ "Guide" if t == "guide" else "Notebook" }}</button>
+        {% endfor %}
+      </div>
+    {% else %}
+      <span class="pl-2 text-sm font-semibold text-p-ink">{{ "Guide" if guide else "Notebook" }}</span>
+    {% endif %}
     <button type="button" data-panel-close class="inline-flex h-10 w-10 items-center justify-center rounded-[10px] text-p-ink-3 hover:bg-p-raised">
-      {{ icon("close", 18, "", 2) }}<span class="sr-only">Close the notebook</span>
+      {{ icon("close", 18, "", 2) }}<span class="sr-only">Close the side panel</span>
     </button>
   </div>
-  <div class="flex flex-col gap-3.5 px-6 pb-9 pt-6">
+  {% if guide %}
+  <section id="pane-guide" data-pane="guide" {% if tabs|length > 1 %}role="tabpanel" aria-labelledby="tab-guide"{% endif %}
+           class="flex flex-col gap-3.5 px-6 pb-9 pt-6">
+    <h2 class="text-[23px] font-semibold tracking-tight">{{ guide.title }}</h2>
+    <div class="p-prose p-guide text-base leading-[1.65] text-p-ink-2" data-guide-md>{{ guide.body_md }}</div>
+  </section>
+  {% endif %}
+  {% if notebook is not none %}
+  <section id="pane-notebook" data-pane="notebook" {% if tabs|length > 1 %}role="tabpanel" aria-labelledby="tab-notebook"{% endif %}
+           class="{{ 'hidden ' if guide else '' }}flex flex-col gap-3.5 px-6 pb-9 pt-6">
     <div class="flex flex-col gap-1">
-      <h2 id="panel-heading" class="text-[23px] font-semibold tracking-tight">Notebook</h2>
+      <h2 class="text-[23px] font-semibold tracking-tight">Notebook</h2>
       <p class="text-[15px] text-p-ink-3">Lines you saved from your exercises. Select any line in the chat to save it here.</p>
     </div>
     <ul id="notebook-list" class="flex flex-col" role="list">
@@ -210,15 +249,18 @@
     </ul>
     <p id="notebook-empty" class="{{ 'hidden' if notebook else '' }} rounded-2xl bg-p-quiet px-4 py-4 text-[15px] text-p-ink-3">Nothing saved yet.</p>
     <a href="{{ url_for('participant.notebook') }}" class="self-start text-[15px] font-semibold text-p-accent-ink">Open my notebook</a>
-  </div>
+  </section>
+  {% endif %}
 </aside>
 
+{% if notebook is not none %}
 {# Shown over selected text in the chat (static/participant/select-save.js). #}
 <div id="save-bar" role="toolbar" aria-label="Selected text" class="fixed z-40 hidden rounded-xl bg-p-ink p-1 shadow-[0_8px_24px_rgba(24,24,31,0.18)]">
   <button type="button" id="save-button" class="inline-flex min-h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-p-page hover:bg-white/10">
     {{ icon("notebook", 16) }}<span>Save to notebook</span>
   </button>
 </div>
+{% endif %}
 {% endif %}
 {% endblock %}
 
@@ -227,8 +269,6 @@
 <script src="{{ url_for('static', filename='js/shared.js') }}"></script>
 <script src="{{ url_for('static', filename='participant/exercise.js') }}"></script>
 {% if state == "open" %}<script src="{{ url_for('static', filename='participant/chat.js') }}"></script>{% endif %}
-{% if notebook is not none %}
-<script src="{{ url_for('static', filename='participant/panel.js') }}"></script>
-<script src="{{ url_for('static', filename='participant/select-save.js') }}"></script>
-{% endif %}
+{% if notebook is not none or guide %}<script src="{{ url_for('static', filename='participant/panel.js') }}"></script>{% endif %}
+{% if notebook is not none %}<script src="{{ url_for('static', filename='participant/select-save.js') }}"></script>{% endif %}
 {% endblock %}

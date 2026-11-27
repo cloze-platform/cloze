@@ -36,6 +36,42 @@ function renderMarkdown(text) {
   }
 }
 
+// Guides are written by the research team, not a model, and may show images,
+// but only from the study's own media library (/media/<id>; the server checks
+// each one belongs to the researcher when the guide is saved). Same tags as
+// replies plus img; links open in a new tab. Anything else, an image from
+// another site included, is dropped. Replies keep renderMarkdown above.
+var GUIDE_ALLOWED_TAGS = MARKDOWN_ALLOWED_TAGS.concat(['img']);
+var GUIDE_ALLOWED_ATTR = MARKDOWN_ALLOWED_ATTR.concat(['src', 'alt']);
+var GUIDE_IMAGE_SRC = /^\/media\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\?r=(display|thumb))?$/i;
+
+function renderGuideMarkdown(text) {
+  var plain = escapeHtml(text || '').replace(/\n/g, '<br>');
+  if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') return plain;
+  try {
+    var fragment = DOMPurify.sanitize(marked.parse(text || ''), {
+      ALLOWED_TAGS: GUIDE_ALLOWED_TAGS,
+      ALLOWED_ATTR: GUIDE_ALLOWED_ATTR,
+      RETURN_DOM_FRAGMENT: true,
+    });
+    fragment.querySelectorAll('img').forEach(function (img) {
+      if (!GUIDE_IMAGE_SRC.test(img.getAttribute('src') || '')) { img.remove(); return; }
+      img.setAttribute('loading', 'lazy');
+      if (!img.hasAttribute('alt')) img.setAttribute('alt', '');
+    });
+    fragment.querySelectorAll('a[href]').forEach(function (a) {
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener noreferrer');
+    });
+    var holder = document.createElement('div');
+    holder.appendChild(fragment);
+    return holder.innerHTML;
+  } catch (e) {
+    console.error('Guide rendering failed:', e);
+    return plain;
+  }
+}
+
 function highlight(text, query) {
   if (!text || !query) return escapeHtml(text || '');
   var i = text.toLowerCase().indexOf(query.toLowerCase());
