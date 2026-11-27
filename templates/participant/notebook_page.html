@@ -1,0 +1,88 @@
+{% extends "participant/base.html" %}
+{# One page of the notebook: what was saved in one exercise, in the order it
+   happened in the chat (services/notebook.py). Each line has who said it,
+   "See it in the chat" (the exercise, at that message), and the
+   participant's thought written right under it, saved as they leave the
+   field. Remove is in each line's "…" menu, with Undo
+   (static/participant/notebook.js). #}
+{% from "participant/_notebook.html" import styles, avatar, who, counts %}
+
+{% block title %}{{ page.title }} · Notebook · Cloze{% endblock %}
+{% block head %}{{ styles() }}{% endblock %}
+
+{% block content %}
+<div class="min-h-full bg-p-desk">
+<div class="mx-auto flex max-w-3xl flex-col gap-4 px-3 pb-14 pt-4 sm:px-8 lg:pt-10">
+  <a href="{{ url_for('participant.notebook') }}" class="inline-flex min-h-10 items-center gap-1 self-start rounded-lg px-2 text-[15px] font-semibold text-p-accent-ink no-underline hover:bg-p-raised">
+    {{ icon("chevron-left", 16, "", 2) }}Your notebook
+  </a>
+
+  <article aria-labelledby="nb-title" class="nb-sheet relative rounded-md px-5 pb-8 pt-7 sm:pl-16 sm:pr-10">
+    <span aria-hidden="true" class="pointer-events-none absolute inset-y-0 left-3 w-px bg-p-paper-margin sm:left-11"></span>
+    <p class="text-[13px] font-semibold uppercase tracking-wider text-p-paper-hint">{{ page.chapter }}</p>
+    <h1 id="nb-title" class="mt-1 text-[28px] font-semibold leading-tight tracking-tight">{{ page.title }}</h1>
+    <p class="mt-1 text-sm text-p-paper-hint">
+      <span data-page-counts>{{ counts(page) }}</span>
+      {% if page.exercise %} · <a href="/exercise/{{ page.conversation_id }}" class="font-semibold text-p-accent-ink">Open the exercise</a>{% endif %}
+    </p>
+
+    <ol data-entries class="mt-6 flex flex-col" role="list">
+      {% for e in page.entries %}
+        <li id="e-{{ e.id }}" data-entry="{{ e.id }}" class="flex scroll-mt-24 flex-col gap-2 rounded-lg py-5">
+          <blockquote class="nb-serif text-[19px] leading-[1.6] text-p-ink">“{{ e.text }}”</blockquote>
+          <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-p-paper-hint">
+            {{ avatar(e) }}
+            {% if who(e) %}<span class="font-semibold text-p-ink-2">{{ who(e) }}</span><span aria-hidden="true">·</span>{% endif %}
+            <time datetime="{{ e.created_at|p_iso }}">{{ e.created_at|p_saved(nav.timezone, nav.now) }}</time>
+            <span aria-hidden="true">·</span>
+            <a href="{{ e.chat_url }}" class="font-semibold text-p-accent-ink">See it in the chat<span aria-hidden="true"> ↗</span></a>
+            <div class="relative ml-auto">
+              <button type="button" data-menu aria-haspopup="menu" aria-expanded="false" aria-controls="menu-{{ e.id }}"
+                      class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-p-ink-3 hover:bg-p-raised">
+                {{ icon("more", 18, "", 2) }}<span class="sr-only">More for this line</span>
+              </button>
+              <div id="menu-{{ e.id }}" data-menu-list role="menu" hidden
+                   class="absolute right-0 top-10 z-20 min-w-[200px] rounded-xl border border-p-line bg-p-surface p-1 shadow-lg">
+                <button type="button" role="menuitem" data-remove class="flex min-h-10 w-full items-center rounded-lg px-3 text-left text-[15px] text-p-help hover:bg-p-raised">Remove from notebook</button>
+              </div>
+            </div>
+          </div>
+          <label for="t-{{ e.id }}" class="sr-only">Your thought on this line</label>
+          <textarea id="t-{{ e.id }}" data-thought rows="1" maxlength="{{ note_limit }}" placeholder="Write a thought…"
+                    class="nb-lines w-full resize-none border-0 bg-transparent p-0 text-base text-p-pen placeholder:italic placeholder:text-p-paper-hint">{{ e.thought or "" }}</textarea>
+          <p data-thought-status role="status" class="min-h-4 text-xs text-p-paper-hint"></p>
+        </li>
+      {% endfor %}
+    </ol>
+    <p data-page-empty hidden class="mt-6 text-[15px] text-p-ink-3">This page is empty now. <a href="{{ url_for('participant.notebook') }}" class="font-semibold text-p-accent-ink">Back to your notebook</a></p>
+  </article>
+
+  {% if previous or following %}
+    <nav aria-label="Pages" class="flex items-stretch justify-between gap-3">
+      {% if previous %}
+        <a href="{{ previous.url }}" class="flex min-w-0 flex-col rounded-xl px-3 py-2 no-underline hover:bg-p-raised">
+          <span class="text-[13px] text-p-paper-hint">Previous page</span>
+          <span class="truncate text-[15px] font-semibold text-p-accent-ink">{{ previous.title }}</span>
+        </a>
+      {% else %}<span></span>{% endif %}
+      {% if following %}
+        <a href="{{ following.url }}" class="flex min-w-0 flex-col items-end rounded-xl px-3 py-2 text-right no-underline hover:bg-p-raised">
+          <span class="text-[13px] text-p-paper-hint">Next page</span>
+          <span class="truncate text-[15px] font-semibold text-p-accent-ink">{{ following.title }}</span>
+        </a>
+      {% endif %}
+    </nav>
+  {% endif %}
+</div>
+</div>
+
+<div data-toast role="status" hidden
+     class="fixed bottom-[calc(env(safe-area-inset-bottom)+92px)] left-1/2 z-40 -translate-x-1/2 items-center gap-4 rounded-xl bg-p-ink px-4 py-2.5 text-[15px] text-p-page shadow-lg lg:bottom-8">
+  <span>Removed</span>
+  <button type="button" data-undo class="min-h-9 rounded-lg px-2 font-semibold underline underline-offset-2">Undo</button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='participant/notebook.js') }}"></script>
+{% endblock %}

@@ -92,6 +92,9 @@ _READABLE_PAIRS = [
     ("help", "help-soft"), ("help", "page"),
     ("night-ink", "night"), ("night-muted", "night"), ("night-muted", "night-raised"),
     ("night-link", "night"), ("night-help", "night-raised"), ("night-help", "night-help-soft"),
+    # The notebook's paper.
+    ("ink", "paper"), ("ink-2", "paper"), ("ink-3", "paper"), ("paper-hint", "paper"), ("paper-hint", "desk"),
+    ("pen", "paper"), ("ink", "desk"), ("on-accent", "accent"),
 ]
 
 

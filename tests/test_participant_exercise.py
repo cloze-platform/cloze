@@ -217,13 +217,18 @@ def test_the_notebook_panel_lists_saved_lines_escaped(study, login_as, v2, db):
                        selection_text="<b>a line</b> I liked", created_at=1_800_000_000 - 120),
         SavedSelection(user_id=study["other"].id, conversation_id=study["thoughts_conv"].id,
                        selection_text="someone else's line"),
+        # Saved in another exercise: the panel shows this exercise's page only.
+        SavedSelection(user_id=study["patient"].id, conversation_id=study["welcome_conv"].id,
+                       selection_text="a line from Welcome"),
     ])
     db.session.commit()
     html = login_as(study["patient"]).get(_url(study["thoughts_conv"])).get_data(as_text=True)
     panel = html[html.index('<aside id="panel"'):html.index("</aside>")]
     assert "&lt;b&gt;a line&lt;/b&gt; I liked" in panel and "someone else" not in panel
+    assert "a line from Welcome" not in panel
+    assert f'href="/notebook/page/{study["thoughts_conv"].id}"' in panel
     assert "Thought records · 2 min ago" in panel
-    assert 'id="panel-toggle"' in html and 'data-notebook-count>1<' in html
+    assert 'id="panel-toggle"' in html and 'data-notebook-count>2<' in html
     assert f'data-save-to="{study["thoughts_conv"].id}"' in html
     assert "participant/panel.js" in html and "participant/select-save.js" in html
 

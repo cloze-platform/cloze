@@ -14,8 +14,15 @@
   window.ParticipantExercise = { renderReplies: renderReplies };
   renderReplies();
 
-  // Start at the latest message.
-  if (document.querySelector("[data-message-id]")) {
+  // Start at the latest message, or at the one a notebook line points to
+  // ("See it in the chat": #m-<id>), highlighted for a moment.
+  var linked = /^#m-\d+$/.test(location.hash) && document.getElementById(location.hash.slice(1));
+  if (linked) {
+    linked.scrollIntoView({ block: "center" });
+    linked.style.transition = "background-color 2.4s ease-out";
+    linked.style.backgroundColor = "var(--p-accent-soft)";
+    setTimeout(function () { linked.style.backgroundColor = ""; }, 1200);
+  } else if (document.querySelector("[data-message-id]")) {
     window.scrollTo(0, document.body.scrollHeight);
   }
 
