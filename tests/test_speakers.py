@@ -335,7 +335,7 @@ def test_a_saved_line_keeps_who_said_it(enrolled, login_as):
 
     assert [s.speaker_name for s in SavedSelection.query.order_by(SavedSelection.id)] == ["Sky", None]
     assert c.get("/api/selections").get_json()[-1]["speaker_name"] == "Sky"
-    notebook = c.get("/notebook").get_data(as_text=True)
-    assert "Sky · " in notebook
+    page = c.get(f"/notebook/page/{enrolled['conv'].id}").get_data(as_text=True)
+    assert '<span class="font-semibold text-p-ink-2">Sky</span>' in page
     panel = c.get(f"/exercise/{enrolled['conv'].id}").get_data(as_text=True)
     assert "Sky · Meet Sky and Star" in panel

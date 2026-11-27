@@ -22,6 +22,7 @@ from flask_login import current_user, login_required
 from ..extensions import db
 from ..models import Message, SafetyPlan, SavedSelection
 from ..services import participant_nav
+from ..services import notebook as notebook_layout
 from ..services.greeting import greeting_for
 from ..services.speakers import cast_for_template, reply_parts
 from ..services.guides import guide_for_template
@@ -159,7 +160,10 @@ def _render_exercise(nav, ex, messages):
         need_help=help_box,
         greeting=greeting_for(ex.id, current_user) if not messages else None,
         safety=safety_info(nav.provider_id) if state == "agree" else None, default_agreement=DEFAULT_AGREEMENT,
-        notebook=participant_nav.notebook_entries(current_user.id) if nav.can_save else None,
+        # The panel's Notebook: this exercise's page only.
+        notebook=([(s, ex.title) for s, _ in participant_nav.notebook_entries(current_user.id, limit=None)
+                   if ex.conversation_id and s.conversation_id == ex.conversation_id]
+                  if nav.can_save else None),
     )
 
 
@@ -176,18 +180,31 @@ def closed(nav):
 @participant_bp.route("/notebook")
 @participant_page
 def notebook(nav):
-    """The participant's saved lines, grouped by the exercise they came from,
-    newest first, each with the participant's own note. 404 when the study
-    doesn't let participants save, as the menu leaves it out then."""
+    """The notebook's contents: each exercise with something saved is a page,
+    under its group, in the order of the Exercises menu. Search runs in the
+    browser over every entry. 404 when the study doesn't let participants
+    save, as the menu leaves it out then."""
     if not nav.can_save:
         abort(404)
-    groups = {}
-    for selection, title in participant_nav.notebook_entries(current_user.id, limit=None):
-        group = groups.setdefault(selection.conversation_id, {
-            "title": title, "exercise": nav.exercise_for_conversation(selection.conversation_id), "lines": []})
-        group["lines"].append(selection)
-    return render_page("participant/notebook.html", nav, current="notebook", groups=list(groups.values()),
-                       note_limit=SavedSelection.NOTE_LIMIT)
+    book = notebook_layout.build(nav, current_user)
+    return render_page("participant/notebook.html", nav, current="notebook", book=book,
+                       search_data=notebook_layout.search_data(book, lambda t: p_saved(t, nav.timezone, nav.now)))
+
+
+@participant_bp.route("/notebook/page/<int:conversation_id>")
+@participant_page
+def notebook_page(conversation_id, nav):
+    """One page of the notebook: what was saved in one exercise, in the order
+    it happened in the chat, each line with the participant's thought."""
+    if not nav.can_save:
+        abort(404)
+    book = notebook_layout.build(nav, current_user)
+    page = book.page_for(conversation_id)
+    if page is None:
+        abort(404)
+    previous, following = book.neighbours(page)
+    return render_page("participant/notebook_page.html", nav, current="notebook", book=book, page=page,
+                       previous=previous, following=following, note_limit=SavedSelection.NOTE_LIMIT)
 
 
 @participant_bp.route("/safety-plan")
@@ -283,6 +300,17 @@ def p_date(timestamp, tz_name):
     """'3 Dec' in the study's timezone."""
     d = _local(timestamp, tz_name)
     return f"{d.day} {d:%b}"
+
+
+@participant_bp.app_template_filter("p_saved")
+def p_saved(timestamp, tz_name, now):
+    """'Today', 'Yesterday', or 'Mon 23 Nov', in the study's timezone."""
+    then, today = _local(timestamp, tz_name).date(), _local(now, tz_name).date()
+    if then == today:
+        return "Today"
+    if (today - then).days == 1:
+        return "Yesterday"
+    return p_day(timestamp, tz_name)
 
 
 @participant_bp.app_template_filter("p_when")

@@ -1,0 +1,57 @@
+{# The notebook's paper look and its small pieces, shared by the contents and
+   a page (participant/notebook.html, participant/notebook_page.html).
+   Colours are the participant tokens: paper, desk, paper-rule, paper-margin,
+   paper-hint and pen (llm_chat/theme.py), light and dark. #}
+
+{% macro styles() %}
+<style>
+  /* Tailwind's display classes would otherwise beat the hidden attribute. */
+  [hidden] { display: none !important; }
+  /* The notebook sits on a desk, all the way down the page. */
+  body.bg-p-page, main#main { background-color: var(--p-desk); }
+  /* Saved lines read as quotations, in a serif already on the device. */
+  .nb-serif { font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif; }
+  /* Paper: saved lines sit on it like clippings. */
+  .nb-paper {
+    background-color: var(--p-paper);
+    box-shadow: 0 1px 2px rgb(60 50 30 / 0.08), 0 6px 16px rgb(60 50 30 / 0.08);
+  }
+  .nb-sheet {
+    background-color: var(--p-paper);
+    box-shadow: 0 1px 2px rgb(60 50 30 / 0.08), 0 10px 28px rgb(60 50 30 / 0.10);
+  }
+  /* Ruled lines where the participant writes: one under each line of their
+     thought, moving with the text. Decorative only. */
+  .nb-lines {
+    line-height: 2rem;
+    background-image: linear-gradient(to bottom, transparent calc(2rem - 1px), var(--p-paper-rule) calc(2rem - 1px));
+    background-size: 100% 2rem;
+    background-attachment: local;
+  }
+  @media (prefers-color-scheme: dark) {
+    .nb-paper, .nb-sheet { box-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35); }
+  }
+  .nb-flash { animation: nb-flash 2.4s ease-out; }
+  @keyframes nb-flash { from { background-color: var(--p-accent-soft); } to { background-color: transparent; } }
+</style>
+{% endmacro %}
+
+{# Who said a line: the speaker's picture or initials, "You", or nothing. #}
+{% macro avatar(entry, size=28) -%}
+  {%- if entry.speaker and entry.speaker.image_url -%}
+    <img src="{{ entry.speaker.image_url }}" alt="" width="{{ size }}" height="{{ size }}" class="shrink-0 rounded-full object-cover" style="width: {{ size }}px; height: {{ size }}px">
+  {%- elif entry.speaker -%}
+    <span aria-hidden="true" class="flex shrink-0 items-center justify-center rounded-full bg-p-accent-soft text-xs font-semibold text-p-accent-ink" style="width: {{ size }}px; height: {{ size }}px">{{ entry.speaker.initial }}</span>
+  {%- elif entry.is_you -%}
+    <span aria-hidden="true" class="flex shrink-0 items-center justify-center rounded-full bg-p-raised text-p-ink-3" style="width: {{ size }}px; height: {{ size }}px">{{ icon("user", 15) }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro who(entry) -%}
+  {%- if entry.speaker %}{{ entry.speaker.name }}{% elif entry.is_you %}You{% endif -%}
+{%- endmacro %}
+
+{% macro counts(page) -%}
+  {{ page.entries|length }} line{{ "s" if page.entries|length != 1 }}
+  {%- if page.thoughts %} · {{ page.thoughts }} thought{{ "s" if page.thoughts != 1 }}{% endif -%}
+{%- endmacro %}

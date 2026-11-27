@@ -78,7 +78,7 @@
         {% if m.role == "user" %}
           {# The last message, saved without a reply (the reply failed): offer Try again. #}
           {% set unanswered = loop.last and m.client_message_id and state == "open" %}
-          <div class="flex flex-col items-end gap-1" data-message-id="{{ m.id }}"
+          <div id="m-{{ m.id }}" class="flex scroll-mt-24 flex-col items-end gap-1 rounded-2xl" data-message-id="{{ m.id }}"
                {% if unanswered %}data-client-id="{{ m.client_message_id }}" data-pending-reply{% endif %}>
             <div data-bubble class="max-w-[82%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-p-accent-soft px-4 py-2.5 text-base leading-relaxed">{{ m.content }}</div>
             {% if unanswered %}
@@ -92,7 +92,7 @@
           </div>
         {% else %}
           {% set parts = reply_parts.get(m.id) %}
-          <div class="flex flex-col {{ 'gap-4' if parts else 'gap-1' }}" data-message-id="{{ m.id }}">
+          <div id="m-{{ m.id }}" class="flex scroll-mt-24 flex-col rounded-2xl {{ 'gap-4' if parts else 'gap-1' }}" data-message-id="{{ m.id }}">
             {% if parts %}
               {% for part in parts %}{{ reply_part(part) }}{% endfor %}
             {% else %}
@@ -270,7 +270,7 @@
            class="{{ 'hidden ' if guide else '' }}flex flex-col gap-3.5 px-6 pb-9 pt-6">
     <div class="flex flex-col gap-1">
       <h2 class="text-[23px] font-semibold tracking-tight">Notebook</h2>
-      <p class="text-[15px] text-p-ink-3">Lines you saved from your exercises. Select any line in the chat to save it here.</p>
+      <p class="text-[15px] text-p-ink-3">This exercise’s page. Select any line in the chat to save it here.</p>
     </div>
     <ul id="notebook-list" class="flex flex-col" role="list">
       {% for selection, title in notebook %}
@@ -281,7 +281,7 @@
       {% endfor %}
     </ul>
     <p id="notebook-empty" class="{{ 'hidden' if notebook else '' }} rounded-2xl bg-p-quiet px-4 py-4 text-[15px] text-p-ink-3">Nothing saved yet.</p>
-    <a href="{{ url_for('participant.notebook') }}" class="self-start text-[15px] font-semibold text-p-accent-ink">Open my notebook</a>
+    <a href="{{ '/notebook/page/%d' % exercise.conversation_id if notebook else url_for('participant.notebook') }}" class="self-start text-[15px] font-semibold text-p-accent-ink">{{ "Open this page in your notebook" if notebook else "Open my notebook" }}</a>
   </section>
   {% endif %}
 </aside>

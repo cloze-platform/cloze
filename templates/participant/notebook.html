@@ -1,28 +1,89 @@
 {% extends "participant/base.html" %}
-{# The Notebook: saved lines grouped by exercise, newest first, each with the
-   participant's own note (SavedSelection.note), shown apart from where the
-   line came from. Notes and removing go through /api/selections
-   (static/participant/notebook.js). #}
+{# The notebook's contents. Each exercise with something saved is a page,
+   under its group, in the same order as the Exercises menu
+   (services/notebook.py). Each page card shows its latest line, and a New
+   mark when something was saved since the participant last looked
+   (remembered in the browser). Search and its filters run in the browser
+   over every entry (static/participant/notebook.js). #}
+{% from "participant/_notebook.html" import styles, avatar, who, counts %}
+{% from "participant/_exercises.html" import mark, state_label %}
 
 {% block title %}Notebook · Cloze{% endblock %}
+{% block head %}{{ styles() }}{% endblock %}
+
+{% macro page_card(page) %}
+  {% set e = page.latest_entry %}
+  <a href="{{ page.url }}" data-page-card data-latest="{{ page.latest }}"
+     class="nb-paper flex min-w-0 flex-col gap-2 rounded-md px-4 pb-3 pt-3.5 text-p-ink no-underline hover:ring-1 hover:ring-p-paper-margin">
+    <span class="flex items-center gap-2">
+      {% if page.exercise %}{{ mark(nav, page.exercise) }}{% endif %}
+      <span class="min-w-0 truncate text-[17px] font-semibold">{{ page.title }}{% if page.exercise %}<span class="sr-only">, {{ state_label(nav, page.exercise) }}</span>{% endif %}</span>
+      <span data-new hidden class="shrink-0 rounded-full bg-p-pen px-2 py-0.5 text-xs font-bold tracking-wide text-p-paper">New<span class="sr-only">: saved since your last visit</span></span>
+      <span class="ml-auto shrink-0 text-p-paper-hint">{{ icon("chevron-right", 16, "", 2) }}</span>
+    </span>
+    <span class="flex min-w-0 items-center gap-2.5">
+      {{ avatar(e) }}
+      <span class="nb-serif min-w-0 flex-1 truncate text-base">{% if who(e) %}<span class="sr-only">{{ who(e) }}: </span>{% endif %}“{{ e.text }}”</span>
+    </span>
+    <span class="text-[13px] text-p-paper-hint">{{ counts(page) }} · {{ page.latest|p_saved(nav.timezone, nav.now) }}</span>
+  </a>
+{% endmacro %}
+
+{% macro chip(key, label) -%}
+  <button type="button" data-chip="{{ key }}" aria-pressed="{{ 'true' if key == 'all' else 'false' }}"
+          class="min-h-9 shrink-0 rounded-full border border-p-line-strong bg-p-surface px-3.5 text-sm font-medium text-p-ink-2 aria-pressed:border-p-pen aria-pressed:bg-p-pen aria-pressed:text-p-paper">{{ label }}</button>
+{%- endmacro %}
 
 {% block content %}
-<div class="mx-auto flex max-w-3xl flex-col gap-8 px-5 pb-14 pt-7 sm:px-8 lg:pt-12">
-  <div class="flex flex-col gap-2">
-    <h1 class="text-[32px] font-semibold leading-tight tracking-tight">Notebook</h1>
-    <p class="max-w-xl text-base leading-relaxed text-p-ink-3">Lines you saved from your exercises. Your study team can see them too.</p>
-  </div>
+<div class="min-h-full bg-p-desk">
+<div class="mx-auto flex max-w-3xl flex-col gap-6 px-5 pb-14 pt-6 sm:px-8 lg:pt-12">
+  <header class="flex items-start gap-3">
+    <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+      <h1 class="text-[28px] font-semibold leading-tight tracking-tight lg:text-[32px]">Your notebook</h1>
+      <p class="max-w-xl text-base leading-relaxed text-p-ink-2">Each exercise has its own page. What you save in an exercise goes on its page.</p>
+      <p class="flex items-center gap-1.5 text-[13px] text-p-paper-hint">{{ icon("eye", 15) }}Your study team can read your notebook.</p>
+    </div>
+    {% if book.pages %}
+      <button type="button" data-search-open aria-controls="nb-search-area" aria-expanded="false"
+              class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-p-ink-2 hover:bg-p-raised lg:hidden">
+        {{ icon("search", 21, "", 2) }}<span class="sr-only">Search your notebook</span>
+      </button>
+    {% endif %}
+  </header>
 
-  <div class="flex flex-wrap items-center gap-4 rounded-[20px] bg-p-quiet px-5 py-4">
-    <span aria-hidden="true" class="inline-flex min-h-9 items-center gap-2 rounded-lg bg-p-ink px-3 text-sm font-medium text-p-page">{{ icon("notebook", 16) }}Save to notebook</span>
-    <p class="flex-[1_1_260px] text-[15px] leading-relaxed text-p-ink-3">Select any line in a chat, then choose <strong class="font-semibold text-p-ink-2">Save to notebook</strong>. It lands here with where it came from, and you can add your own note to it.</p>
-  </div>
+  {% if book.pages %}
+    {% set speakers = search_data|map(attribute="speaker")|reject("equalto", "")|unique|list %}
+    <div id="nb-search-area" data-search-area class="hidden flex-col gap-3 lg:flex">
+      <div class="flex items-center gap-2">
+        <label for="nb-search" class="sr-only">Search your notebook</label>
+        <input id="nb-search" type="search" autocomplete="off" placeholder="Search your notebook"
+               class="min-h-11 min-w-0 flex-1 rounded-xl border border-p-line-strong bg-p-surface px-4 text-base text-p-ink placeholder:text-p-hint">
+        <button type="button" data-search-close class="inline-flex min-h-11 items-center rounded-xl px-3 text-[15px] font-semibold text-p-accent-ink hover:bg-p-raised lg:hidden">Close</button>
+      </div>
+      <div data-chips role="group" aria-label="Show" class="-mx-5 hidden gap-2 overflow-x-auto px-5 pb-1 lg:mx-0 lg:flex-wrap lg:px-0">
+        {{ chip("all", "All") }}{{ chip("thoughts", "With my thoughts") }}
+        {% for name in speakers %}{{ chip("speaker:" ~ name, name) }}{% endfor %}
+        {{ chip("week", "This week") }}
+      </div>
+      <p data-result-count role="status" class="text-sm text-p-ink-3"></p>
+      <ul data-results class="hidden flex-col gap-3" role="list"></ul>
+    </div>
 
-  {% if not groups %}
-    <section class="flex flex-col items-start gap-3 rounded-[20px] border border-p-line px-6 py-7">
+    <div data-contents class="flex flex-col gap-7">
+      {% for chapter, pages in book.chapters %}
+        <section aria-labelledby="nb-ch-{{ loop.index }}" class="flex flex-col gap-3">
+          <h2 id="nb-ch-{{ loop.index }}" class="text-base font-semibold text-p-ink-2">{{ chapter }}</h2>
+          {% for page in pages %}{{ page_card(page) }}{% endfor %}
+        </section>
+      {% endfor %}
+      <p class="text-[13px] text-p-paper-hint">Exercises with nothing saved don’t have a page yet.</p>
+    </div>
+    <script type="application/json" id="notebook-data">{{ search_data|tojson }}</script>
+  {% else %}
+    <section class="nb-paper flex flex-col items-start gap-3 rounded-md px-6 py-7">
       <span aria-hidden="true" class="flex h-11 w-11 items-center justify-center rounded-full bg-p-accent-soft text-p-accent-ink">{{ icon("notebook", 20) }}</span>
       <h2 class="text-lg font-semibold">Nothing saved yet</h2>
-      <p class="text-[15px] leading-relaxed text-p-ink-3">When a line in an exercise is worth keeping, save it and you'll find it here.</p>
+      <p class="text-[15px] leading-relaxed text-p-ink-3">In an exercise, select a line that’s worth keeping and choose Save to notebook. It goes on that exercise’s page here, where you can add your own thoughts.</p>
       {% set focus = nav.focus_group() %}
       {% set next_ex = focus.exercises|rejectattr("state", "equalto", "finished")|first if focus else none %}
       {% if next_ex and not nav.locked(next_ex) %}
@@ -30,47 +91,7 @@
       {% endif %}
     </section>
   {% endif %}
-
-  {% for group in groups %}
-    <section aria-labelledby="nb-{{ loop.index }}" class="flex flex-col gap-1">
-      <div class="flex flex-wrap items-end justify-between gap-2 pb-2">
-        <div class="flex flex-col">
-          <h2 id="nb-{{ loop.index }}" class="text-xl font-semibold tracking-tight">{{ group.title }}</h2>
-          <span class="text-[13px] text-p-hint">{% if group.exercise %}{{ group.exercise.group.name }} · {% endif %}{{ group.lines|length }} saved</span>
-        </div>
-        {% if group.exercise %}
-          <a href="{{ exercise_url(group.exercise) }}" class="text-[15px] font-semibold text-p-accent-ink">Open the exercise</a>
-        {% endif %}
-      </div>
-      <ul class="flex flex-col border-t border-p-line" role="list">
-        {% for line in group.lines %}
-          <li data-line="{{ line.id }}" class="flex flex-col gap-2 border-b border-p-line py-4">
-            <blockquote class="text-[17px] leading-relaxed">“{{ line.selection_text }}”</blockquote>
-            <p data-note-view class="{{ '' if line.note else 'hidden' }} text-[15px] leading-relaxed text-p-ink-2">
-              <span class="font-semibold">Your note:</span> <span data-note-text>{{ line.note or "" }}</span>
-            </p>
-            <form data-note-form class="hidden flex-col gap-2">
-              <label class="flex flex-col gap-1 text-[13px] font-medium text-p-ink-3">Your note
-                <textarea data-note-input rows="2" maxlength="{{ note_limit }}" class="rounded-xl border border-p-line-strong bg-p-surface px-3 py-2 text-base text-p-ink">{{ line.note or "" }}</textarea>
-              </label>
-              <div class="flex gap-2">
-                <button type="submit" class="inline-flex min-h-10 items-center rounded-xl bg-p-accent px-4 text-sm font-semibold text-p-on-accent hover:bg-p-accent-hover">Save note</button>
-                <button type="button" data-note-cancel class="inline-flex min-h-10 items-center rounded-xl px-3 text-sm font-semibold text-p-accent-ink hover:bg-p-raised">Cancel</button>
-              </div>
-            </form>
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <span class="text-[13px] text-p-hint">{% if line.speaker_name %}{{ line.speaker_name }} · {% endif %}<time datetime="{{ line.created_at|p_iso }}">{{ line.created_at|p_ago(nav.timezone, nav.now) }}</time></span>
-              <span class="flex gap-1">
-                <button type="button" data-note-edit class="inline-flex min-h-9 items-center rounded-lg px-2.5 text-sm font-semibold text-p-accent-ink hover:bg-p-raised">{{ "Edit note" if line.note else "Add a note" }}</button>
-                <button type="button" data-remove class="inline-flex min-h-9 items-center rounded-lg px-2.5 text-sm font-semibold text-p-ink-3 hover:bg-p-raised hover:text-p-help">Remove</button>
-              </span>
-            </div>
-            <p data-line-error role="alert" class="hidden text-sm text-p-help"></p>
-          </li>
-        {% endfor %}
-      </ul>
-    </section>
-  {% endfor %}
+</div>
 </div>
 {% endblock %}
 

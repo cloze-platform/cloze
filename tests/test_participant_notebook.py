@@ -22,25 +22,76 @@ def lines(study, db):
     return made
 
 
-def _main(client):
-    html = client.get("/notebook").get_data(as_text=True)
+def _main(client, url="/notebook"):
+    html = client.get(url).get_data(as_text=True)
     return html[html.index("<main"):html.index("</main>")]
 
 
-def test_lines_grouped_by_exercise_newest_first(study, login_as, v2, lines):
+# ── The contents ──
+
+def test_contents_says_the_rule_and_lists_pages_in_menu_order(study, login_as, v2, lines):
     main = _main(login_as(study["patient"]))
-    assert main.index("Thought records") < main.index("Welcome")
-    assert "Week 1 · 2 saved" in main and "Intro · 1 saved" in main
-    assert f'href="/exercise/{study["thoughts_conv"].id}"' in main
-    assert main.index("&lt;b&gt;bold&lt;/b&gt; claim") < main.index("Thoughts shape feelings")
+    assert "Each exercise has its own page. What you save in an exercise goes on its page." in main
+    assert "Your study team can read your notebook." in main
+    # The same order as the Exercises menu: Intro opened before Week 1.
+    assert main.index(">Intro</h2>") < main.index(">Week 1</h2>")
+    assert main.index("Welcome") < main.index("Thought records")
+    thoughts = f'href="/notebook/page/{study["thoughts_conv"].id}"'
+    assert thoughts in main and "2 lines · 1 thought" in main
+    # Each card previews its latest line, escaped.
+    card = main[main.index(thoughts):]
+    assert "&lt;b&gt;bold&lt;/b&gt; claim" in card[:card.index("</a>")]
     assert "Someone else" not in main
-    assert "Your study team can see them too." in main
 
 
-def test_the_participants_note_is_shown_apart(study, login_as, v2, lines):
+def test_the_old_pretend_button_is_gone(study, login_as, v2, lines):
     main = _main(login_as(study["patient"]))
-    assert '<span data-note-text>Remember this</span>' in main
-    assert main.count(">Edit note<") == 1 and main.count(">Add a note<") == 2
+    assert "Save to notebook</span>" not in main and ">Add a note<" not in main
+
+
+def test_search_data_covers_every_entry_and_stays_inert(study, login_as, v2, lines):
+    html = login_as(study["patient"]).get("/notebook").get_data(as_text=True)
+    data = html[html.index('id="notebook-data">'):]
+    data = data[:data.index("</script>")]
+    assert "\\u003cb\\u003ebold" in data             # tojson escapes < and >, so it can't end the script
+    assert "Remember this" in data and "Welcome line" in data and "Someone else" not in data
+
+
+# ── A page ──
+
+def test_a_page_in_chat_order_with_thoughts_and_back_to_the_moment(study, login_as, v2, lines, db):
+    from llm_chat.models import Message
+    conv = study["thoughts_conv"]
+    first_user, first_reply = (Message.query.filter_by(conversation_id=conv.id).order_by(Message.id).limit(2).all())
+    lines[0].message_ids = f"[{first_reply.id}]"     # "Thoughts shape feelings": the model's line
+    lines[1].message_ids = f"[{first_user.id}]"      # "<b>bold</b> claim": the participant's own words
+    db.session.commit()
+    main = _main(login_as(study["patient"]), f"/notebook/page/{conv.id}")
+
+    assert main.index("&lt;b&gt;bold&lt;/b&gt; claim") < main.index("Thoughts shape feelings")   # chat order
+    assert '<span class="font-semibold text-p-ink-2">You</span>' in main
+    assert f'href="/exercise/{conv.id}#m-{first_reply.id}"' in main
+    assert ">Remember this</textarea>" in main and 'placeholder="Write a thought…"' in main
+    assert "Remove from notebook" in main
+    # Intro (Welcome) comes before Week 1 in the menu, so it's the previous page.
+    assert "Previous page" in main and "Welcome" in main and "Next page" not in main
+
+
+def test_pages_that_dont_exist_are_404(study, login_as, v2, lines):
+    client = login_as(study["patient"])
+    assert client.get(f"/notebook/page/{study['star_conv'].id}").status_code == 404      # nothing saved there
+    assert client.get("/notebook/page/999999").status_code == 404
+    assert login_as(study["other"]).get(f"/notebook/page/{study['thoughts_conv'].id}").status_code == 404
+
+
+def test_the_chat_has_anchors_for_back_to_the_moment(study, login_as, v2, db):
+    from llm_chat.models import Message
+    conv = study["thoughts_conv"]
+    conv.consent_provided = True
+    db.session.commit()
+    html = login_as(study["patient"]).get(f"/exercise/{conv.id}").get_data(as_text=True)
+    for m in Message.query.filter_by(conversation_id=conv.id):
+        assert f'id="m-{m.id}"' in html
 
 
 def test_empty_notebook(study, login_as, v2, db):
@@ -55,6 +106,7 @@ def test_404_when_saving_is_off(study, login_as, v2, db):
     db.session.add(AdminSettings(setting_name="users_can_save_selections", setting_value="false"))
     db.session.commit()
     assert login_as(study["patient"]).get("/notebook").status_code == 404
+    assert login_as(study["patient"]).get(f"/notebook/page/{study['thoughts_conv'].id}").status_code == 404
 
 
 # ── The selections API ──
