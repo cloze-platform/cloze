@@ -12,6 +12,7 @@ from llm_chat.extensions import db as _db
 from llm_chat.models import (AdminSettings, ChatTemplate, Conversation, Guide, MediaAsset, Model,
                              ProviderPatient)
 from llm_chat.models.study_flow import FlowChat, FlowPhase, StudyFlow
+from llm_chat.services.guides import MODEL_HEADING
 from llm_chat.services.llm_interface import LLMInterface
 
 
@@ -218,3 +219,28 @@ def test_no_guide_means_no_guide_tab(enrolled, login_as, change):
     _db.session.commit()
     html = page(login_as(enrolled["patient"]), enrolled["conv"])
     assert 'id="pane-guide"' not in html and 'data-panel-open="guide"' not in html
+
+
+def send(client, conv, text="hello"):
+    return client.post(f"/api/conversation/{conv.id}/message", json={"message": text, "client_message_id": f"id-{text}"})
+
+
+def test_the_model_gets_the_guide_only_when_the_team_turns_it_on(enrolled, login_as):
+    c = login_as(enrolled["patient"])
+    assert send(c, enrolled["conv"], "first").status_code == 200
+    assert enrolled["prompts"][-1] == "THE COMPOSED PROMPT"
+
+    enrolled["chat"].guide_to_model = True
+    _db.session.commit()
+    assert send(c, enrolled["conv"], "second").status_code == 200
+    sent = enrolled["prompts"][-1]
+    # The composed prompt (with the universal safety layers) stays first.
+    assert sent.startswith("THE COMPOSED PROMPT\n\n" + MODEL_HEADING)
+    assert "# The CBT model" in sent and "They affect <b>feelings</b>." in sent
+    # Editing the guide reaches the chat already under way...
+    enrolled["guide"].body_md = "Updated guide."
+    _db.session.commit()
+    send(c, enrolled["conv"], "third")
+    assert enrolled["prompts"][-1].endswith("Updated guide.")
+    # ...and the stored prompt never changes.
+    assert _db.session.get(Conversation, enrolled["conv"].id).system_prompt_content == "THE COMPOSED PROMPT"
