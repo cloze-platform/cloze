@@ -64,6 +64,15 @@
     .type-dot { background: #57534e; }
     .timeline-bar { background: var(--dark-raised); }
   }
+  /* The guide preview: as close to the participant's Guide tab as this page allows. */
+  .guide-preview > * + * { margin-top: 0.75em; }
+  .guide-preview h1, .guide-preview h2 { font-size: 1.15em; font-weight: 600; }
+  .guide-preview h3, .guide-preview h4 { font-weight: 600; }
+  .guide-preview ul { list-style: disc; padding-left: 1.4em; }
+  .guide-preview ol { list-style: decimal; padding-left: 1.4em; }
+  .guide-preview blockquote { border-radius: 10px; background: rgba(120, 113, 108, 0.1); padding: 0.6em 0.9em; }
+  .guide-preview img { max-width: 100%; height: auto; border-radius: 10px; }
+  .guide-preview a { color: var(--brand, #4f46e5); text-decoration: underline; }
 </style>
 {% endblock %}
 
@@ -87,6 +96,13 @@
       </button>
     </div>
     <div id="speakerList" class="flex lg:flex-col gap-1 lg:gap-0.5 overflow-x-auto lg:overflow-visible"></div>
+    <div class="mt-6 mb-2 flex items-center justify-between">
+      <h3 class="text-[11px] font-medium uppercase tracking-wider text-stone-300">Guides</h3>
+      <button onclick="newGuide()" class="add-trigger p-0.5" title="New guide" aria-label="New guide">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
+    <div id="guideList" class="flex lg:flex-col gap-1 lg:gap-0.5 overflow-x-auto lg:overflow-visible"></div>
   </div>
 
   {# ── Main workspace — document surface ── #}
@@ -210,6 +226,33 @@
       </div>
     </div>
 
+    {# Guide editor #}
+    <div id="guideWorkspace" class="hidden pt-2">
+      <h2 id="guideHeading" class="text-2xl font-bold text-stone-900">New guide</h2>
+      <p class="mt-1 text-sm text-stone-400">Participants read a guide beside the chat, in a Guide tab next to their Notebook. Attach it to chats in each chat's settings; one guide can serve several chats. Write in Markdown: # for headings, **bold**, - for lists, &gt; for a callout.</p>
+      <div class="mt-6 space-y-4">
+        <label class="block"><span class="text-[11px] text-stone-300">Title</span>
+          <input id="guideTitle" type="text" maxlength="120" class="inline-input text-sm font-medium text-stone-900 py-1" placeholder="For example: The CBT model"></label>
+        <div class="flex flex-wrap items-end gap-2">
+          <label class="block min-w-0 flex-1"><span class="text-[11px] text-stone-300">Insert an image from your media library</span>
+            <select id="guideImage" class="inline-input text-sm text-stone-700 py-1 cursor-pointer"></select></label>
+          <button onclick="insertGuideImage()" class="text-sm font-medium text-cloze-indigo hover:text-cloze-hover transition-colors">Insert</button>
+        </div>
+        <div class="grid gap-4 lg:grid-cols-2">
+          <label class="block"><span class="text-[11px] text-stone-300">Guide (Markdown)</span>
+            <textarea id="guideBody" rows="18" maxlength="20000" oninput="previewGuide()" class="mt-1 w-full rounded-lg border border-stone-200 bg-white p-3 font-mono text-[13px] leading-relaxed text-stone-800 focus:border-cloze-indigo focus:outline-none"></textarea></label>
+          <div><span class="text-[11px] text-stone-300">What participants see</span>
+            <div id="guidePreview" class="guide-preview mt-1 max-h-[440px] overflow-y-auto rounded-lg border border-stone-100 bg-stone-50 p-4 text-sm leading-relaxed text-stone-800"></div></div>
+        </div>
+        <p id="guideUsedBy" class="text-xs text-stone-400"></p>
+        <div class="flex items-center gap-3 pt-1">
+          <button onclick="saveGuide()" class="text-sm font-medium text-cloze-indigo hover:text-cloze-hover transition-colors">Save</button>
+          <span id="guideStatus" class="text-xs text-stone-400" role="status"></span>
+          <button id="guideDelete" onclick="deleteGuide()" class="ml-auto text-xs text-stone-300 hover:text-red-400 transition-colors">Remove guide</button>
+        </div>
+      </div>
+    </div>
+
     {# Enrollment panel #}
     <div id="enrollPanel" class="hidden pt-2">
       <div class="mb-6">
@@ -227,6 +270,7 @@
 {% endblock %}
 
 {% block scripts %}
+{% include "_markdown_scripts.html" %}
 <script>
   var flows = [];
   var currentFlow = null;
@@ -236,6 +280,8 @@
   var mediaAssets = [];
   var speakers = [];
   var currentSpeaker = null;   // the speaker being edited; null for a new one
+  var guides = [];
+  var currentGuide = null;     // the guide being edited; null for a new one
 
   // ── Init ──────────────────────────────────────────────────
 
@@ -247,6 +293,7 @@
       fetch('/api/system_prompts').then(r => r.json()),
       fetch('/api/provider/media').then(r => r.ok ? r.json() : { assets: [] }),
       fetch('/api/provider/speakers').then(r => r.ok ? r.json() : { speakers: [] }),
+      fetch('/api/provider/guides').then(r => r.ok ? r.json() : { guides: [] }),
     ]);
     flows = results[0];
     patients = results[1];
@@ -254,8 +301,10 @@
     systemPrompts = results[3];
     mediaAssets = results[4].assets || [];
     speakers = results[5].speakers || [];
+    guides = results[6].guides || [];
     renderFlowList();
     renderSpeakerList();
+    renderGuideList();
   }
 
   // ── Flow list sidebar ─────────────────────────────────────
@@ -283,6 +332,7 @@
 
   async function selectFlow(flowId) {
     hideSpeakerWorkspace();
+    hideGuideWorkspace();
     var resp = await fetch('/api/provider/flows/' + flowId);
     currentFlow = await resp.json();
 
@@ -517,6 +567,7 @@
           '</select></div>' +
         '</div>' +
         renderCastFields(chat) +
+        renderGuideFields(chat) +
         '<div class="flex items-center gap-3 pt-1">' +
           '<button onclick="saveChat(' + chat.id + ')" class="text-sm font-medium text-cloze-indigo hover:text-cloze-hover transition-colors">Save</button>' +
           '<span id="chat-save-status-' + chat.id + '" class="text-xs text-stone-400"></span>' +
@@ -575,7 +626,7 @@
 
   function showSpeakerWorkspace(sp) {
     currentSpeaker = sp;
-    ['emptyState', 'flowTypePicker', 'enrollPanel', 'flowWorkspace'].forEach(function(id) {
+    ['emptyState', 'flowTypePicker', 'enrollPanel', 'flowWorkspace', 'guideWorkspace'].forEach(function(id) {
       document.getElementById(id).classList.add('hidden');
     });
     document.getElementById('speakerWorkspace').classList.remove('hidden');
@@ -646,6 +697,145 @@
     renderSpeakerList();
   }
 
+  // ── Guides ────────────────────────────────────────────────
+
+  function renderGuideList() {
+    var container = document.getElementById('guideList');
+    if (!guides.length) {
+      container.innerHTML = '<div class="py-2 text-xs text-stone-300">None yet</div>';
+      return;
+    }
+    container.innerHTML = guides.map(function(g) {
+      var active = currentGuide && currentGuide.id === g.id && !document.getElementById('guideWorkspace').classList.contains('hidden');
+      var used = (g.used_by || []).length;
+      return '<button type="button" class="flow-item block w-full text-left ' + (active ? 'active' : '') + '" onclick="editGuide(' + g.id + ')">' +
+        '<span class="block truncate text-sm font-medium">' + escapeHtml(g.title) + '</span>' +
+        '<span class="block text-[11px] text-stone-300">' + (used ? 'In ' + used + ' chat' + (used === 1 ? '' : 's') : 'Not in a chat yet') + '</span></button>';
+    }).join('');
+  }
+
+  function hideGuideWorkspace() {
+    document.getElementById('guideWorkspace').classList.add('hidden');
+  }
+
+  function showGuideWorkspace(g) {
+    currentGuide = g;
+    ['emptyState', 'flowTypePicker', 'enrollPanel', 'flowWorkspace', 'speakerWorkspace'].forEach(function(id) {
+      document.getElementById(id).classList.add('hidden');
+    });
+    document.getElementById('guideWorkspace').classList.remove('hidden');
+    document.getElementById('guideHeading').textContent = g ? g.title : 'New guide';
+    document.getElementById('guideTitle').value = g ? g.title : '';
+    document.getElementById('guideBody').value = g ? g.body_md : '';
+    document.getElementById('guideImage').innerHTML = mediaAssets.length
+      ? mediaAssets.map(function(a) { return '<option value="' + escapeHtml(a.id) + '">' + escapeHtml(a.label) + '</option>'; }).join('')
+      : '<option value="">No images in your library yet (Settings)</option>';
+    document.getElementById('guideDelete').classList.toggle('hidden', !g);
+    document.getElementById('guideStatus').textContent = '';
+    renderGuideUsedBy(g);
+    previewGuide();
+    currentFlow = null;
+    currentSpeaker = null;
+    renderFlowList();
+    renderSpeakerList();
+    renderGuideList();
+    document.getElementById('guideTitle').focus();
+  }
+
+  function renderGuideUsedBy(g) {
+    var used = g ? (g.used_by || []) : [];
+    document.getElementById('guideUsedBy').textContent = used.length
+      ? 'Used by: ' + used.map(function(u) { return u.title + ' (' + u.flow + ')'; }).join(', ')
+      : 'Not attached to a chat yet.';
+  }
+
+  function newGuide() { showGuideWorkspace(null); }
+
+  function editGuide(id) {
+    showGuideWorkspace(guides.find(function(g) { return g.id === id; }) || null);
+  }
+
+  function previewGuide() {
+    document.getElementById('guidePreview').innerHTML = renderGuideMarkdown(document.getElementById('guideBody').value) ||
+      '<p class="text-stone-400">Nothing written yet.</p>';
+  }
+
+  function insertGuideImage() {
+    var id = document.getElementById('guideImage').value;
+    var asset = mediaAssets.find(function(a) { return a.id === id; });
+    if (!asset) return;
+    var body = document.getElementById('guideBody');
+    var alt = (asset.alt_text || asset.label || '').replace(/[\[\]]/g, '');
+    var text = '![' + alt + '](/media/' + asset.id + ')';
+    var at = body.selectionStart != null ? body.selectionStart : body.value.length;
+    var before = body.value.slice(0, at), after = body.value.slice(at);
+    var lead = before && !before.endsWith('\n\n') ? (before.endsWith('\n') ? '\n' : '\n\n') : '';
+    body.value = before + lead + text + '\n\n' + after;
+    body.focus();
+    body.selectionStart = body.selectionEnd = (before + lead + text).length;
+    previewGuide();
+  }
+
+  async function saveGuide() {
+    var status = document.getElementById('guideStatus');
+    var body = { title: document.getElementById('guideTitle').value, body_md: document.getElementById('guideBody').value };
+    status.classList.remove('text-red-500');
+    status.textContent = 'Saving...';
+    var resp = await fetch(currentGuide ? '/api/provider/guides/' + currentGuide.id : '/api/provider/guides', {
+      method: currentGuide ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    var saved = await resp.json().catch(function() { return {}; });
+    if (!resp.ok) {
+      status.textContent = saved.error || 'Not saved. Please try again.';
+      status.classList.add('text-red-500');
+      return;
+    }
+    var i = guides.findIndex(function(g) { return g.id === saved.id; });
+    if (i >= 0) guides[i] = saved; else guides.push(saved);
+    currentGuide = saved;
+    document.getElementById('guideHeading').textContent = saved.title;
+    document.getElementById('guideDelete').classList.remove('hidden');
+    renderGuideUsedBy(saved);
+    status.textContent = 'Saved';
+    renderGuideList();
+  }
+
+  async function deleteGuide() {
+    if (!currentGuide) return;
+    var used = (currentGuide.used_by || []).length;
+    var ok = await showDialog({ title: 'Remove ' + currentGuide.title, message: used ? 'It will disappear from the ' + used + ' chat' + (used === 1 ? '' : 's') + ' that use it.' : 'No chat uses it yet.', confirmText: 'Remove', danger: true });
+    if (!ok) return;
+    var resp = await fetch('/api/provider/guides/' + currentGuide.id, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } });
+    if (!resp.ok) { showDialog({ title: 'Not removed', message: 'Please try again.', confirmText: 'OK' }); return; }
+    var gone = currentGuide.id;
+    guides = guides.filter(function(g) { return g.id !== gone; });
+    currentGuide = null;
+    hideGuideWorkspace();
+    document.getElementById('emptyState').classList.remove('hidden');
+    renderGuideList();
+  }
+
+  // A chat's guide, and whether it opens at the start and goes to the AI.
+  function renderGuideFields(chat) {
+    if (!guides.length) {
+      return '<div><span class="text-[11px] text-stone-300">Guide</span>' +
+        '<p class="py-1 text-xs text-stone-400">To show a guide beside this chat, write one under Guides on the left.</p></div>';
+    }
+    var options = '<option value="">None</option>' + guides.map(function(g) {
+      return '<option value="' + g.id + '"' + (g.id === chat.guide_id ? ' selected' : '') + '>' + escapeHtml(g.title) + '</option>';
+    }).join('');
+    return '<div class="grid grid-cols-2 gap-4">' +
+      '<div><span class="text-[11px] text-stone-300">Guide</span>' +
+      '<select data-field="guide_id" class="inline-input text-sm text-stone-700 py-1 cursor-pointer">' + options + '</select></div>' +
+      '<div class="flex flex-col justify-end gap-1 pb-1">' +
+        '<label class="inline-flex items-center gap-1.5 text-sm text-stone-700"><input type="checkbox" data-flag="guide_opens_on_start"' + (chat.guide_opens_on_start ? ' checked' : '') + '> Open it when the chat starts</label>' +
+        '<label class="inline-flex items-center gap-1.5 text-sm text-stone-700"><input type="checkbox" data-flag="guide_to_model"' + (chat.guide_to_model ? ' checked' : '') + '> Give the AI the guide\'s text</label>' +
+      '</div></div>' +
+      '<p class="text-xs text-stone-400">Giving the AI the guide adds its text after this chat\'s prompt on every message, which adds to the cost of each reply. Your prompt itself isn\'t changed.</p>';
+  }
+
   // A chat's cast (which speakers appear in it) and its main speaker.
   function renderCastFields(chat) {
     if (!speakers.length) {
@@ -677,6 +867,7 @@
 
   function showNewFlowPicker() {
     hideSpeakerWorkspace();
+    hideGuideWorkspace();
     document.getElementById('emptyState').classList.add('hidden');
     document.getElementById('flowWorkspace').classList.add('hidden');
     document.getElementById('enrollPanel').classList.add('hidden');
@@ -898,13 +1089,14 @@
         payload[field] = val ? parseInt(val) : null;
       } else if (field === 'greeting_asset_id') {
         payload[field] = val || null;
-      } else if (field === 'main_speaker_id') {
+      } else if (field === 'main_speaker_id' || field === 'guide_id') {
         payload[field] = val ? parseInt(val) : null;
       } else {
         payload[field] = val;
       }
     });
 
+    form.querySelectorAll('[data-flag]').forEach(function(box) { payload[box.dataset.flag] = box.checked; });
     var castBoxes = form.querySelectorAll('[data-cast]');
     if (castBoxes.length) {
       payload.speaker_ids = Array.prototype.filter.call(castBoxes, function(b) { return b.checked; })
