@@ -107,6 +107,12 @@ class FlowChat(db.Model):
     # skipped, and no foreign key can block deleting either side.
     speaker_ids = db.Column(db.Text, nullable=True)
     main_speaker_id = db.Column(db.Integer, nullable=True)
+    # The chat's guide (a Guide id, read live), whether it opens beside the
+    # chat the first time, and whether the model is given its text. No
+    # foreign key, for the same reasons as the cast.
+    guide_id = db.Column(db.Integer, nullable=True)
+    guide_opens_on_start = db.Column(db.Boolean, nullable=True, default=False)
+    guide_to_model = db.Column(db.Boolean, nullable=True, default=False)
 
     # Relationships
     model = db.relationship('Model')
@@ -129,6 +135,9 @@ class FlowChat(db.Model):
             'greeting_asset': self.greeting_asset.to_dict() if self.greeting_asset else None,
             'speaker_ids': self.cast_ids,
             'main_speaker_id': self.main_speaker_id,
+            'guide_id': self.guide_id,
+            'guide_opens_on_start': bool(self.guide_opens_on_start),
+            'guide_to_model': bool(self.guide_to_model),
         }
 
     @property
