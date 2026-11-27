@@ -121,15 +121,6 @@
         <span class="mt-0.5 text-p-waiting">{{ icon("clock", 16, "", 2) }}</span>
         <span><strong class="font-semibold" data-few-turns-count>{{ exercise.turns_left }} turn{{ "s" if exercise.turns_left != 1 }} left in this exercise.</strong> When they're used up, you can still read everything here.</span>
       </p>
-      {% if guide %}
-        {# On a phone, the guide is one tap away beside the reply box. #}
-        <div class="mb-2 flex lg:hidden">
-          <button type="button" data-panel-open="guide" aria-controls="panel"
-                  class="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-p-line-strong bg-p-surface px-3 text-sm font-medium text-p-ink hover:bg-p-raised">
-            {{ icon("page", 16) }}Guide
-          </button>
-        </div>
-      {% endif %}
       {# The reply box: one line that grows as you type (static/participant/chat.js). #}
       <form id="composer" data-conversation-id="{{ exercise.conversation_id }}"{% if writer %} data-writer="{{ writer }}"{% endif %}
             class="flex items-end gap-2 rounded-[28px] border border-p-line-strong bg-p-surface py-1.5 pl-5 pr-1.5 shadow-[0_1px_2px_rgba(24,24,31,0.04),0_8px_24px_rgba(24,24,31,0.05)] focus-within:border-p-accent focus-within:shadow-[0_0_0_1px_var(--p-accent)]">
