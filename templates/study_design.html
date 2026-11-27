@@ -271,6 +271,7 @@
 
 {% block scripts %}
 {% include "_markdown_scripts.html" %}
+<script src="{{ url_for('static', filename='js/need-help-editor.js') }}"></script>
 <script>
   var flows = [];
   var currentFlow = null;
@@ -568,6 +569,7 @@
         '</div>' +
         renderCastFields(chat) +
         renderGuideFields(chat) +
+        renderNeedHelpFields(chat) +
         '<div class="flex items-center gap-3 pt-1">' +
           '<button onclick="saveChat(' + chat.id + ')" class="text-sm font-medium text-cloze-indigo hover:text-cloze-hover transition-colors">Save</button>' +
           '<span id="chat-save-status-' + chat.id + '" class="text-xs text-stone-400"></span>' +
@@ -836,6 +838,20 @@
       '<p class="text-xs text-stone-400">Giving the AI the guide adds its text after this chat\'s prompt on every message, which adds to the cost of each reply. Your prompt itself isn\'t changed.</p>';
   }
 
+  // A chat's Need help?: the researcher's default from Settings, its own
+  // (the shared editor in static/js/need-help-editor.js), or none.
+  function renderNeedHelpFields(chat) {
+    var mode = chat.need_help_mode || 'default';
+    var options = [['default', 'Your default from Settings'], ['custom', 'Written for this chat'], ['off', 'Off']].map(function(m) {
+      return '<option value="' + m[0] + '"' + (m[0] === mode ? ' selected' : '') + '>' + m[1] + '</option>';
+    }).join('');
+    return '<div><span class="text-[11px] text-stone-300">Need help?</span>' +
+      '<select data-field="need_help_mode" onchange="this.parentNode.querySelector(\'[data-need-help-editor]\').classList.toggle(\'hidden\', this.value !== \'custom\')" class="inline-input text-sm text-stone-700 py-1 cursor-pointer">' + options + '</select>' +
+      '<div data-need-help-editor class="mt-2 rounded-lg border border-stone-200 p-3' + (mode === 'custom' ? '' : ' hidden') + '">' +
+        NeedHelpEditor.html(chat.need_help, 'w-full rounded border border-stone-200 px-2 py-1 text-sm text-stone-700 focus:border-cloze-indigo focus:outline-none') +
+      '</div></div>';
+  }
+
   // A chat's cast (which speakers appear in it) and its main speaker.
   function renderCastFields(chat) {
     if (!speakers.length) {
@@ -1097,6 +1113,9 @@
     });
 
     form.querySelectorAll('[data-flag]').forEach(function(box) { payload[box.dataset.flag] = box.checked; });
+    if (payload.need_help_mode === 'custom') {
+      payload.need_help = NeedHelpEditor.read(form.querySelector('[data-need-help-editor]'));
+    }
     var castBoxes = form.querySelectorAll('[data-cast]');
     if (castBoxes.length) {
       payload.speaker_ids = Array.prototype.filter.call(castBoxes, function(b) { return b.checked; })

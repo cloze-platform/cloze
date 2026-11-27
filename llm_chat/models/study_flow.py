@@ -113,6 +113,9 @@ class FlowChat(db.Model):
     guide_id = db.Column(db.Integer, nullable=True)
     guide_opens_on_start = db.Column(db.Boolean, nullable=True, default=False)
     guide_to_model = db.Column(db.Boolean, nullable=True, default=False)
+    # Need help?: NULL (the researcher's default), 'custom' (need_help, JSON) or 'off'.
+    need_help_mode = db.Column(db.String(10), nullable=True)
+    need_help = db.Column(db.Text, nullable=True)
 
     # Relationships
     model = db.relationship('Model')
@@ -138,6 +141,8 @@ class FlowChat(db.Model):
             'guide_id': self.guide_id,
             'guide_opens_on_start': bool(self.guide_opens_on_start),
             'guide_to_model': bool(self.guide_to_model),
+            'need_help_mode': self.need_help_mode or 'default',
+            'need_help': json.loads(self.need_help) if self.need_help else None,
         }
 
     @property

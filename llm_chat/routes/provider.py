@@ -16,6 +16,7 @@ from ..utils.settings_resolution import get_effective_setting
 from ..services.greeting import apply_greeting_fields
 from ..services.speakers import apply_cast_fields
 from ..services.guides import apply_chat_guide_fields
+from ..services import need_help
 
 provider_bp = Blueprint("provider", __name__, url_prefix="")
 
@@ -418,6 +419,7 @@ def get_my_flags():
         'access_hours_mode': (flags.access_hours_mode if flags else None) or 'lock',
         'greeting_text': flags.greeting_text if flags else None,
         'greeting_asset': flags.greeting_asset.to_dict() if (flags and flags.greeting_asset) else None,
+        'need_help': need_help.load(flags.need_help) if flags else None,
     })
 
 
@@ -527,6 +529,7 @@ def update_my_flags():
 
     try:
         apply_greeting_fields(flags, data, current_user)
+        need_help.apply_default(flags, data)
     except ValueError as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 400
@@ -535,7 +538,7 @@ def update_my_flags():
                          {k: data[k] for k in data if k in editable
                           or k in ('guard_enabled', 'access_hours_enabled', 'guard_keywords', 'access_hours_days',
                                    'access_hours_mode',
-                                   'greeting_text', 'greeting_asset_id')})
+                                   'greeting_text', 'greeting_asset_id', 'need_help')})
     db.session.commit()
     return jsonify({'status': 'success'})
 
@@ -954,6 +957,7 @@ def create_flow_chat(phase_id):
         apply_greeting_fields(chat, data, current_user)
         apply_cast_fields(chat, data, current_user)
         apply_chat_guide_fields(chat, data, current_user)
+        need_help.apply_chat_fields(chat, data)
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
     db.session.add(chat)
@@ -996,6 +1000,7 @@ def update_flow_chat(chat_id):
         apply_greeting_fields(chat, data, current_user)
         apply_cast_fields(chat, data, current_user)
         apply_chat_guide_fields(chat, data, current_user)
+        need_help.apply_chat_fields(chat, data)
     except ValueError as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 400

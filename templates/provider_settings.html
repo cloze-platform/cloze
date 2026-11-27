@@ -215,6 +215,21 @@
     </div>
   </section>
 
+  {# Need help? #}
+  <section id="needHelpSection" class="mb-8 rounded-lg border border-stone-200 bg-white">
+    <div class="border-b border-stone-100 px-5 py-3">
+      <h3 class="text-sm font-semibold text-stone-900">Need help?</h3>
+      <p class="mt-0.5 text-xs text-stone-500">What participants see when they tap Need help? in a chat's reply box: a message from you, and up to three buttons. Each chat in Study Design can use this, have its own, or turn it off. With nothing here, chats on your default show no Need help? button.</p>
+    </div>
+    <div class="p-5">
+      <div id="needHelpEditor" class="max-w-2xl"></div>
+      <div class="mt-4 flex items-center gap-3">
+        <button onclick="saveNeedHelp()" class="rounded-lg bg-cloze-indigo px-4 py-2 text-sm font-medium text-white hover:bg-cloze-hover">Save</button>
+        <span id="needHelpSaveStatus" class="text-xs text-stone-400" role="status"></span>
+      </div>
+    </div>
+  </section>
+
   {# Media library #}
   <section id="mediaSection" class="mb-8 rounded-lg border border-stone-200 bg-white">
     <div class="border-b border-stone-100 px-5 py-3">
@@ -291,6 +306,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/need-help-editor.js') }}"></script>
 <script>
   var myFlags = {};
   var myPrompts = [];
@@ -379,6 +395,7 @@
       renderFlagsSummary();
 
       document.getElementById('greetingText').value = myFlags.greeting_text || '';
+      document.getElementById('needHelpEditor').innerHTML = NeedHelpEditor.html(myFlags.need_help, NEED_HELP_INPUT);
       await loadMedia();
 
       // Auto-size all textareas after content is loaded
@@ -681,6 +698,26 @@
           greeting_text: document.getElementById('greetingText').value,
           greeting_asset_id: document.getElementById('greetingAsset').value || null,
         })
+      });
+      var result = await resp.json();
+      if (!resp.ok) return flashStatus(statusEl, result.error || 'Error saving', false);
+      flashStatus(statusEl, 'Saved', true);
+    } catch (e) {
+      flashStatus(statusEl, 'Error saving', false);
+    }
+  }
+
+  // ── Need help? (static/js/need-help-editor.js) ───────────────
+  var NEED_HELP_INPUT = 'w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-cloze-indigo focus:outline-none focus:ring-1 focus:ring-cloze-indigo';
+
+  async function saveNeedHelp() {
+    var statusEl = document.getElementById('needHelpSaveStatus');
+    statusEl.textContent = 'Saving...';
+    try {
+      var resp = await fetch('/api/provider/my-flags', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ need_help: NeedHelpEditor.read(document.getElementById('needHelpEditor')) })
       });
       var result = await resp.json();
       if (!resp.ok) return flashStatus(statusEl, result.error || 'Error saving', false);

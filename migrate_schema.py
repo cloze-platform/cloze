@@ -86,6 +86,10 @@ COLUMN_ADDITIONS = [
     ('flow_chats', 'guide_id', 'INTEGER'),
     ('flow_chats', 'guide_opens_on_start', 'BOOLEAN'),
     ('flow_chats', 'guide_to_model', 'BOOLEAN'),
+    # Stage 2 Need help?: the researcher's default, and each chat's mode and own content.
+    ('provider_feature_flags', 'need_help', 'TEXT'),
+    ('flow_chats', 'need_help_mode', 'VARCHAR(10)'),
+    ('flow_chats', 'need_help', 'TEXT'),
 ]
 
 # ── Indexes on existing tables ───────────────────────────────────

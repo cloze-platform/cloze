@@ -119,6 +119,8 @@ class ProviderFeatureFlags(db.Model):
     # Greeting shown in an empty chat, unless the chat sets its own
     # (FlowChat.greeting_*). See services/greeting.py.
     greeting_text = db.Column(db.Text, nullable=True)
+    # Need help?: the researcher's default for their chats (services/need_help.py), JSON.
+    need_help = db.Column(db.Text, nullable=True)
     greeting_asset_id = db.Column(db.Integer, db.ForeignKey('media_assets.id', ondelete='SET NULL'),
                                   nullable=True)
 

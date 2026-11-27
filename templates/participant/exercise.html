@@ -124,6 +124,13 @@
       {# The reply box: one line that grows as you type (static/participant/chat.js). #}
       <form id="composer" data-conversation-id="{{ exercise.conversation_id }}"{% if writer %} data-writer="{{ writer }}"{% endif %}
             class="flex items-end gap-2 rounded-[28px] border border-p-line-strong bg-p-surface py-1.5 pl-5 pr-1.5 shadow-[0_1px_2px_rgba(24,24,31,0.04),0_8px_24px_rgba(24,24,31,0.05)] focus-within:border-p-accent focus-within:shadow-[0_0_0_1px_var(--p-accent)]">
+        {% if need_help %}
+          {# Need help?: the study team's help with this exercise (not a crisis; that's Get help now). #}
+          <button type="button" data-need-help-open aria-haspopup="dialog" aria-controls="need-help-dialog"
+                  class="-ml-3 inline-flex h-11 shrink-0 items-center gap-1.5 self-center rounded-full px-2.5 text-sm font-semibold text-p-accent-ink hover:bg-p-raised">
+            {{ icon("question", 20, "", 1.9) }}<span class="hidden sm:inline">Need help?</span><span class="sr-only sm:hidden">Need help?</span>
+          </button>
+        {% endif %}
         <label for="reply" class="sr-only">Your reply</label>
         <textarea id="reply" name="message" rows="1" required autocomplete="off" maxlength="10000" placeholder="Write your reply…"
                   class="max-h-48 min-w-0 flex-1 resize-none self-center border-0 bg-transparent py-2.5 text-base leading-normal text-p-ink outline-none placeholder:text-p-hint focus:outline-none focus-visible:outline-none"></textarea>
@@ -187,7 +194,42 @@
     {% endif %}
   </div>
 </div>
+
+{% if need_help %}
+<dialog id="need-help-dialog" aria-labelledby="need-help-heading"
+        class="w-[min(92vw,460px)] rounded-[24px] bg-p-surface p-0 text-p-ink shadow-2xl backdrop:bg-black/40">
+  <div class="flex flex-col gap-4 px-6 pb-6 pt-5">
+    <div class="flex items-start justify-between gap-3">
+      <div class="flex flex-col gap-1">
+        <p class="text-[13px] font-semibold uppercase tracking-wider text-p-hint">From the study team</p>
+        <h2 id="need-help-heading" class="text-xl font-semibold tracking-tight">{{ need_help.heading }}</h2>
+      </div>
+      <button type="button" data-need-help-close class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] text-p-ink-3 hover:bg-p-raised">
+        {{ icon("close", 18, "", 2) }}<span class="sr-only">Close</span>
+      </button>
+    </div>
+    {% for paragraph in need_help.paragraphs %}
+      <p class="whitespace-pre-line text-[15px] leading-relaxed text-p-ink-2">{{ paragraph }}</p>
+    {% endfor %}
+    {% if need_help.buttons %}
+      <div class="flex flex-col gap-2">
+        {% for b in need_help.buttons %}
+          {% if b.kind == "send" %}
+            <button type="button" data-need-help-send="{{ b.value }}" class="min-h-11 rounded-xl bg-p-accent px-4 text-left text-[15px] font-semibold text-p-on-accent hover:bg-p-accent-hover">{{ b.label }}</button>
+          {% elif b.kind == "guide" %}
+            <button type="button" data-need-help-guide class="min-h-11 rounded-xl border border-p-line-strong bg-p-surface px-4 text-left text-[15px] font-semibold text-p-ink hover:bg-p-raised">{{ b.label }}</button>
+          {% else %}
+            <a href="{{ b.value }}" target="_blank" rel="noopener noreferrer" data-need-help-dismiss class="flex min-h-11 items-center rounded-xl border border-p-line-strong bg-p-surface px-4 text-[15px] font-semibold text-p-ink no-underline hover:bg-p-raised">{{ b.label }}<span aria-hidden="true">&nbsp;↗</span></a>
+          {% endif %}
+        {% endfor %}
+      </div>
+    {% endif %}
+    <p class="border-t border-p-line pt-3 text-[13px] leading-relaxed text-p-ink-3">In a crisis? <a href="{{ url_for('participant.help_page') }}" data-help-open data-need-help-dismiss class="font-semibold text-p-help">Get help now</a> or call or text 988.</p>
+  </div>
+</dialog>
+{% endif %}
 {% endblock %}
+
 
 {% block panel %}
 {% if notebook is not none or guide %}
@@ -260,6 +302,7 @@
 <script src="{{ url_for('static', filename='js/shared.js') }}"></script>
 <script src="{{ url_for('static', filename='participant/exercise.js') }}"></script>
 {% if state == "open" %}<script src="{{ url_for('static', filename='participant/chat.js') }}"></script>{% endif %}
+{% if need_help %}<script src="{{ url_for('static', filename='participant/need-help.js') }}"></script>{% endif %}
 {% if notebook is not none or guide %}<script src="{{ url_for('static', filename='participant/panel.js') }}"></script>{% endif %}
 {% if notebook is not none %}<script src="{{ url_for('static', filename='participant/select-save.js') }}"></script>{% endif %}
 {% endblock %}
